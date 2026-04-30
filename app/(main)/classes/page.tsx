@@ -1,35 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPlus, faChalkboardTeacher, faUsers, faBookOpen,
-  faGraduationCap, faCheck, faPencil, faTrash,
+  faGraduationCap, faCheck, faPencil, faTrash, faSpinner,
 } from "@fortawesome/free-solid-svg-icons";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import { classesApi, type Class } from "@/lib/api";
 
-// ── Data ─────────────────────────────────────────────────────────────────────
-
-type ClassEntry = {
-  id: string; name: string; sections: string[]; students: number;
-  teacher: string; subjects: string[];
-};
-
-const CLASSES_DATA: ClassEntry[] = [
-  { id: "C001", name: "Nursery", sections: ["A", "B"],       students: 45, teacher: "Mrs. Mita Saha",       subjects: ["English", "Bengali", "Math", "Drawing"] },
-  { id: "C002", name: "Class 1", sections: ["A", "B", "C"], students: 68, teacher: "Mrs. Poulami Roy",      subjects: ["English", "Bengali", "Math", "EVS", "Drawing"] },
-  { id: "C003", name: "Class 2", sections: ["A", "B", "C"], students: 72, teacher: "Mr. Ratan Das",         subjects: ["English", "Bengali", "Math", "EVS", "Drawing"] },
-  { id: "C004", name: "Class 3", sections: ["A", "B", "C"], students: 65, teacher: "Mrs. Sudha Pal",        subjects: ["English", "Bengali", "Math", "Science", "Social", "Drawing"] },
-  { id: "C005", name: "Class 4", sections: ["A", "B", "C"], students: 58, teacher: "Mr. Subir Bose",        subjects: ["English", "Bengali", "Math", "Science", "Social", "Sanskrit"] },
-  { id: "C006", name: "Class 5", sections: ["A", "B"],       students: 54, teacher: "Mrs. Priya Ghosh",     subjects: ["English", "Bengali", "Math", "Science", "Social", "Sanskrit", "Computer"] },
-  { id: "C007", name: "Class 6", sections: ["A", "B"],       students: 49, teacher: "Mr. Sanjay Banerjee",  subjects: ["English", "Bengali", "Math", "Science", "Social", "Sanskrit", "Computer"] },
-];
+// ── Constants ─────────────────────────────────────────────────────────────────
 
 const SUBJECT_COLORS: Record<string, string> = {
   English:  "bg-blue-50   text-blue-700   border-blue-200",
@@ -64,41 +51,42 @@ function StatCard({ icon, label, value }: { icon: typeof faUsers; label: string;
   );
 }
 
-// ── Class row card ────────────────────────────────────────────────────────────
+// ── Class card ────────────────────────────────────────────────────────────────
 
-function ClassCard({ cls }: { cls: ClassEntry }) {
+function ClassCard({
+  cls, onEdit, onDelete,
+}: {
+  cls: Class;
+  onEdit: (cls: Class) => void;
+  onDelete: (id: string) => void;
+}) {
   return (
     <Card className="shadow-none border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all duration-150">
       <CardContent className="p-0">
         <div className="flex items-stretch">
-          {/* Left: identity */}
           <div className="flex flex-col justify-center px-5 py-4 min-w-[160px] border-r border-slate-100">
             <p className="text-[15px] font-bold text-slate-900">{cls.name}</p>
             <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1">
               <FontAwesomeIcon icon={faChalkboardTeacher} className="text-[10px]" />
-              {cls.teacher}
+              {cls.teacher || "—"}
             </p>
           </div>
 
-          {/* Center: sections + subjects */}
           <div className="flex-1 px-5 py-4 flex flex-col justify-center gap-2.5">
-            {/* Sections */}
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-semibold text-slate-400 uppercase w-14 shrink-0">Sections</span>
               <div className="flex gap-1">
                 {cls.sections.map((s) => (
-                  <span key={s}
-                    className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold bg-[#007BFF]/10 text-[#007BFF]">
+                  <span key={s} className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold bg-[#007BFF]/10 text-[#007BFF]">
                     {s}
                   </span>
                 ))}
                 <span className="text-[11px] text-slate-400 ml-1 self-center">
-                  {cls.sections.length} section{cls.sections.length > 1 ? "s" : ""}
+                  {cls.sections.length} section{cls.sections.length !== 1 ? "s" : ""}
                 </span>
               </div>
             </div>
 
-            {/* Subjects */}
             <div className="flex items-start gap-2">
               <span className="text-[10px] font-semibold text-slate-400 uppercase w-14 shrink-0 mt-0.5">Subjects</span>
               <div className="flex flex-wrap gap-1">
@@ -112,17 +100,18 @@ function ClassCard({ cls }: { cls: ClassEntry }) {
             </div>
           </div>
 
-          {/* Right: stats + actions */}
           <div className="flex flex-col justify-center items-end px-5 py-4 border-l border-slate-100 gap-3 shrink-0">
             <div className="text-right">
-              <p className="text-[18px] font-bold text-slate-900 leading-none">{cls.students}</p>
+              <p className="text-[18px] font-bold text-slate-900 leading-none">{cls.student_count}</p>
               <p className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-wide">students</p>
             </div>
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-[#007BFF] hover:bg-blue-50">
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-[#007BFF] hover:bg-blue-50"
+                onClick={() => onEdit(cls)}>
                 <FontAwesomeIcon icon={faPencil} className="text-[11px]" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-300 hover:text-red-500 hover:bg-red-50">
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-300 hover:text-red-500 hover:bg-red-50"
+                onClick={() => onDelete(cls.id)}>
                 <FontAwesomeIcon icon={faTrash} className="text-[11px]" />
               </Button>
             </div>
@@ -133,30 +122,62 @@ function ClassCard({ cls }: { cls: ClassEntry }) {
   );
 }
 
-// ── Add Class Dialog ──────────────────────────────────────────────────────────
+// ── Class Dialog (add / edit) ─────────────────────────────────────────────────
 
 const BLANK = { name: "", teacher: "", sections: [] as string[], subjects: [] as string[] };
 
-function AddClassDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [form, setForm] = useState({ ...BLANK });
+function ClassDialog({
+  open, onClose, initial, onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  initial: Class | null;
+  onSaved: (cls: Class) => void;
+}) {
+  const isEdit = !!initial;
+  const [form, setForm]     = useState<typeof BLANK>({ ...BLANK });
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setForm(initial
+        ? { name: initial.name, teacher: initial.teacher, sections: [...initial.sections], subjects: [...initial.subjects] }
+        : { ...BLANK },
+      );
+      setError("");
+    }
+  }, [open, initial]);
 
   const toggle = <T extends string>(arr: T[], val: T): T[] =>
     arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val];
 
-  const handleClose = () => { setForm({ ...BLANK }); onClose(); };
+  const handleSave = async () => {
+    if (!form.name.trim()) { setError("Class name is required."); return; }
+    setSaving(true); setError("");
+    try {
+      const saved = isEdit
+        ? await classesApi.update(initial!.id, form)
+        : await classesApi.create(form);
+      onSaved(saved);
+      onClose();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to save class.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="!max-w-lg max-h-[90vh] flex flex-col overflow-hidden p-0">
-        {/* Header */}
         <div className="px-6 pt-6 shrink-0">
           <DialogHeader>
-            <DialogTitle className="text-[15px] font-semibold">Add New Class</DialogTitle>
+            <DialogTitle className="text-[15px] font-semibold">{isEdit ? "Edit Class" : "Add New Class"}</DialogTitle>
           </DialogHeader>
         </div>
         <Separator />
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-5">
           <div>
             <label className="text-[11px] font-semibold text-slate-400 uppercase block mb-1">Class Name</label>
@@ -181,9 +202,7 @@ function AddClassDialog({ open, onClose }: { open: boolean; onClose: () => void 
                   <button key={s}
                     onClick={() => setForm((p) => ({ ...p, sections: toggle(p.sections, s) }))}
                     className={`w-9 h-9 rounded-lg text-[13px] font-bold border-2 transition-all
-                      ${active
-                        ? "bg-[#007BFF] text-white border-[#007BFF]"
-                        : "bg-white text-slate-400 border-slate-200 hover:border-slate-300"}`}>
+                      ${active ? "bg-[#007BFF] text-white border-[#007BFF]" : "bg-white text-slate-400 border-slate-200 hover:border-slate-300"}`}>
                     {s}
                   </button>
                 );
@@ -196,9 +215,7 @@ function AddClassDialog({ open, onClose }: { open: boolean; onClose: () => void 
           <div>
             <label className="text-[11px] font-semibold text-slate-400 uppercase block mb-2">
               Subjects
-              <span className="ml-2 text-[10px] font-normal text-slate-400 normal-case">
-                ({form.subjects.length} selected)
-              </span>
+              <span className="ml-2 text-[10px] font-normal text-slate-400 normal-case">({form.subjects.length} selected)</span>
             </label>
             <div className="flex flex-wrap gap-2">
               {ALL_SUBJECTS.map((sub) => {
@@ -208,7 +225,7 @@ function AddClassDialog({ open, onClose }: { open: boolean; onClose: () => void 
                     onClick={() => setForm((p) => ({ ...p, subjects: toggle(p.subjects, sub) }))}
                     className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-medium border transition-all
                       ${active
-                        ? `${SUBJECT_COLORS[sub] ?? "bg-slate-100 text-slate-700 border-slate-200"}`
+                        ? (SUBJECT_COLORS[sub] ?? "bg-slate-100 text-slate-700 border-slate-200")
                         : "bg-white text-slate-500 border-slate-200 hover:border-slate-300"}`}>
                     {active && <FontAwesomeIcon icon={faCheck} className="text-[9px]" />}
                     {sub}
@@ -219,12 +236,14 @@ function AddClassDialog({ open, onClose }: { open: boolean; onClose: () => void 
           </div>
         </div>
 
-        {/* Footer */}
         <div className="p-4 pt-0 shrink-0 border-t border-slate-100">
+          {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-1.5 mb-3">{error}</p>}
           <DialogFooter className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="h-8 text-[13px]" onClick={handleClose}>Cancel</Button>
-            <Button size="sm" className="h-8 text-[13px] bg-[#007BFF] hover:bg-[#0069d9] text-white" onClick={handleClose}>
-              <FontAwesomeIcon icon={faPlus} className="mr-1.5 text-[11px]" /> Create Class
+            <Button variant="outline" size="sm" className="h-8 text-[13px]" onClick={onClose} disabled={saving}>Cancel</Button>
+            <Button size="sm" className="h-8 text-[13px] bg-[#007BFF] hover:bg-[#0069d9] text-white" onClick={handleSave} disabled={saving}>
+              {saving
+                ? <><FontAwesomeIcon icon={faSpinner} className="mr-1.5 animate-spin" />Saving…</>
+                : <><FontAwesomeIcon icon={isEdit ? faCheck : faPlus} className="mr-1.5 text-[11px]" />{isEdit ? "Save Changes" : "Create Class"}</>}
             </Button>
           </DialogFooter>
         </div>
@@ -236,45 +255,102 @@ function AddClassDialog({ open, onClose }: { open: boolean; onClose: () => void 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ClassesPage() {
+  const [classes, setClasses]       = useState<Class[]>([]);
+  const [stats, setStats]           = useState({ total_classes: 0, total_sections: 0, total_students: 0, total_subjects: 0 });
+  const [loading, setLoading]       = useState(true);
   const [showDialog, setShowDialog] = useState(false);
+  const [editTarget, setEditTarget] = useState<Class | null>(null);
 
-  const totalSections = CLASSES_DATA.reduce((a, c) => a + c.sections.length, 0);
-  const totalStudents = CLASSES_DATA.reduce((a, c) => a + c.students, 0);
-  const allSubjects   = Array.from(new Set(CLASSES_DATA.flatMap((c) => c.subjects)));
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [list, s] = await Promise.all([classesApi.list(), classesApi.stats()]);
+      setClasses(list);
+      setStats(s);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const openAdd  = () => { setEditTarget(null); setShowDialog(true); };
+  const openEdit = (cls: Class) => { setEditTarget(cls); setShowDialog(true); };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Delete this class? This cannot be undone.")) return;
+    await classesApi.delete(id);
+    setClasses((p) => p.filter((c) => c.id !== id));
+    setStats((p) => ({ ...p, total_classes: p.total_classes - 1 }));
+  };
+
+  const handleSaved = (saved: Class) => {
+    setClasses((p) => {
+      const idx = p.findIndex((c) => c.id === saved.id);
+      return idx >= 0 ? p.map((c) => (c.id === saved.id ? saved : c)) : [saved, ...p];
+    });
+  };
 
   return (
     <>
       <div className="flex flex-col gap-6">
-        {/* Stat cards */}
         <div className="grid grid-cols-4 gap-4">
-          <StatCard icon={faGraduationCap}     label="Total Classes"    value={CLASSES_DATA.length} />
-          <StatCard icon={faUsers}             label="Total Sections"   value={totalSections} />
-          <StatCard icon={faChalkboardTeacher} label="Total Students"   value={totalStudents} />
-          <StatCard icon={faBookOpen}           label="Subjects Offered" value={allSubjects.length} />
+          <StatCard icon={faGraduationCap}     label="Total Classes"    value={stats.total_classes} />
+          <StatCard icon={faUsers}             label="Total Sections"   value={stats.total_sections} />
+          <StatCard icon={faChalkboardTeacher} label="Total Students"   value={stats.total_students} />
+          <StatCard icon={faBookOpen}          label="Subjects Offered" value={stats.total_subjects} />
         </div>
-        {/* Table header */}
+
         <div className="flex items-center justify-between">
           <h2 className="text-[14px] font-semibold text-slate-800">All Classes</h2>
-          <Button size="sm" className="bg-[#007BFF] hover:bg-[#0069d9] text-white text-[13px] h-8 gap-1.5"
-            onClick={() => setShowDialog(true)}>
-            <FontAwesomeIcon icon={faPlus} className="text-[11px]" />
-            Add Class
+          <Button size="sm" className="bg-[#007BFF] hover:bg-[#0069d9] text-white text-[13px] h-8 gap-1.5" onClick={openAdd}>
+            <FontAwesomeIcon icon={faPlus} className="text-[11px]" /> Add Class
           </Button>
         </div>
-        {/* Column headers */}
+
         <div className="flex items-center px-5 gap-4 text-[10px] font-semibold text-slate-400 uppercase tracking-wide -mb-3">
           <span className="min-w-[160px]">Class / Teacher</span>
           <span className="flex-1">Sections & Subjects</span>
           <span className="w-24 text-right pr-1">Students</span>
         </div>
-        {/* Class list */}
-        <div className="flex flex-col gap-2">
-          {CLASSES_DATA.map((cls) => (
-            <ClassCard key={cls.id} cls={cls} />
-          ))}
-        </div>
+
+        {loading ? (
+          <div className="flex flex-col gap-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="rounded-xl border border-slate-100 bg-white px-5 py-4 flex items-center gap-4">
+                <div className="flex flex-col gap-2 min-w-[160px]">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-3 w-20" />
+                </div>
+                <div className="flex-1 flex gap-2 flex-wrap">
+                  <Skeleton className="h-6 w-16 rounded-full" />
+                  <Skeleton className="h-6 w-20 rounded-full" />
+                  <Skeleton className="h-6 w-14 rounded-full" />
+                </div>
+                <Skeleton className="h-4 w-10" />
+              </div>
+            ))}
+          </div>
+        ) : classes.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-2">
+            <FontAwesomeIcon icon={faGraduationCap} className="text-3xl mb-1" />
+            <p className="text-[13px]">No classes yet. Add your first class above.</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {classes.map((cls) => (
+              <ClassCard key={cls.id} cls={cls} onEdit={openEdit} onDelete={handleDelete} />
+            ))}
+          </div>
+        )}
       </div>
-      <AddClassDialog open={showDialog} onClose={() => setShowDialog(false)} />
+
+      <ClassDialog
+        open={showDialog}
+        onClose={() => setShowDialog(false)}
+        initial={editTarget}
+        onSaved={handleSaved}
+      />
     </>
   );
 }

@@ -257,8 +257,8 @@ export default function TimetablePage() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3 flex-wrap">
               <TabsList>
-                <TabsTrigger value="week">Week</TabsTrigger>
-                <TabsTrigger value="day">Day</TabsTrigger>
+                <TabsTrigger value="week" className="text-xs">Week</TabsTrigger>
+                <TabsTrigger value="day" className="text-xs">Day</TabsTrigger>
               </TabsList>
               {/* Day selector shown in day tab */}
               <TabsContent value="day" className="mt-0 flex-none">
@@ -271,7 +271,7 @@ export default function TimetablePage() {
                         <TabsTrigger
                           key={d}
                           value={d}
-                          className={!isActive && isToday ? "text-[#007BFF] font-semibold" : ""}
+                          className={!isActive && isToday ? "text-[#007BFF] font-semibold text-xs" : "text-xs"}
                         >
                           <span className="flex items-center gap-1">
                             {DAY_SHORT[i]}
