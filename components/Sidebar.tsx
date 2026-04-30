@@ -10,12 +10,14 @@ import {
   faCalendarDays, faCreditCard, faClipboardList, faChartColumn,
   faBus, faBullhorn, faChartPie, faGear, faImages,
   faRightFromBracket, faCircleQuestion, faChevronUp, faChevronDown,
+  faUserPlus,
 } from "@fortawesome/free-solid-svg-icons";
-import { clearSession } from "@/lib/auth";
+import { useAuth } from "@/lib/auth-context";
 
 const navItems = [
   { label: "Dashboard",          icon: faTableColumns,  href: "/"             },
   { label: "Students",           icon: faUsers,         href: "/students"     },
+  { label: "Admissions",         icon: faUserPlus,      href: "/admissions"   },
   // { label: "Teachers",        icon: faGraduationCap, href: "/teachers"     },
   { label: "Classes & Subjects", icon: faChalkboard,    href: "/classes"      },
   { label: "Timetable",          icon: faCalendarDays,  href: "/timetable"    },
@@ -77,8 +79,8 @@ function getInitials(name: string) {
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [user, setUser] = useState<{ name: string; email: string; role: string } | null>(null);
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("sms-sidebar-collapsed") === "true";
@@ -91,16 +93,6 @@ export default function Sidebar() {
   useEffect(() => {
     localStorage.setItem("sms-sidebar-collapsed", String(collapsed));
   }, [collapsed]);
-
-  // Load user from localStorage
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("sms_user");
-      if (raw) setUser(JSON.parse(raw));
-    } catch {
-      // ignore
-    }
-  }, []);
 
   // Visually expanded when not collapsed OR when hovering over a collapsed sidebar
   const isExpanded = !collapsed || hovered;
@@ -222,7 +214,7 @@ export default function Sidebar() {
               <span>Help &amp; Support</span>
             </Link>
             <button
-              onClick={() => { clearSession(); router.replace("/login"); }}
+              onClick={() => { logout().then(() => router.replace("/login")); }}
               className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[12px] text-red-500 hover:bg-red-50 transition-colors w-full">
               <FontAwesomeIcon icon={faRightFromBracket} className="w-[13px] shrink-0" />
               <span>Sign Out</span>
