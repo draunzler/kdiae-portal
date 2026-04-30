@@ -79,8 +79,8 @@ export function AddStudentWizard({
               <LSelect     label="Section"          field="section"        value={form.section}        options={SECTIONS} onChange={set} />
               <LField      label="Roll No."         field="roll_no"        value={form.roll_no}        onChange={set} placeholder="e.g. 01" />
               <LDatePicker label="Admission Date"   field="admission_date" value={form.admission_date} onChange={set} />
-              <LField      label="Contact Phone"    field="phone"          value={form.phone}          onChange={set} placeholder="98300-XXXXX" />
-              <LField      label="Email (optional)" field="email"          value={form.email}          onChange={set} />
+              <LField      label="Contact Phone"    field="phone" type="tel"          value={form.phone}          onChange={set} placeholder="98300-XXXXX" />
+              <LField      label="Email (optional)" field="email" type="email"          value={form.email}          onChange={set} />
               <div className="col-span-2">
                 <label className="text-[11px] font-semibold text-slate-400 uppercase block mb-1">Address</label>
                 <textarea rows={2} className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-[13px] resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -135,8 +135,8 @@ export function AddStudentWizard({
                 <div className="grid grid-cols-2 gap-4">
                   <LField  label="Full Name"  field="name"       value={form.guardian.name}       onChange={(_, v) => setG("name", v)} />
                   <LSelect label="Relation"   field="relation"   value={form.guardian.relation}   options={RELATIONS} onChange={(_, v) => setG("relation", v)} />
-                  <LField  label="Phone"      field="phone"      value={form.guardian.phone}      onChange={(_, v) => setG("phone", v)} />
-                  <LField  label="Email"      field="email"      value={form.guardian.email}      onChange={(_, v) => setG("email", v)} />
+                  <LField  label="Phone"      field="phone" type="tel"      value={form.guardian.phone}      onChange={(_, v) => setG("phone", v)} />
+                  <LField  label="Email"      field="email" type="email"      value={form.guardian.email}      onChange={(_, v) => setG("email", v)} />
                   <LField  label="Occupation" field="occupation" value={form.guardian.occupation} onChange={(_, v) => setG("occupation", v)} />
                   <div />
                   <LSelect label="ID Type"    field="id_type"    value={form.guardian.id_type}    options={ID_TYPES} onChange={(_, v) => setG("id_type", v)} />
@@ -160,8 +160,8 @@ export function AddStudentWizard({
                 <div className="grid grid-cols-2 gap-4">
                   <LField  label="Full Name"  field="name"      value={form.guardian2.name}      onChange={(_, v) => setG2("name", v)} />
                   <LSelect label="Relation"   field="relation"  value={form.guardian2.relation}  options={RELATIONS} onChange={(_, v) => setG2("relation", v)} />
-                  <LField  label="Phone"      field="phone"     value={form.guardian2.phone}     onChange={(_, v) => setG2("phone", v)} />
-                  <LField  label="Email"      field="email"     value={form.guardian2.email}     onChange={(_, v) => setG2("email", v)} />
+                  <LField  label="Phone"      field="phone" type="tel"     value={form.guardian2.phone}     onChange={(_, v) => setG2("phone", v)} />
+                  <LField  label="Email"      field="email" type="email"     value={form.guardian2.email}     onChange={(_, v) => setG2("email", v)} />
                   <LSelect label="ID Type"    field="id_type"   value={form.guardian2.id_type}   options={ID_TYPES} onChange={(_, v) => setG2("id_type", v)} />
                   <LField  label="ID Number"  field="id_number" value={form.guardian2.id_number} onChange={(_, v) => setG2("id_number", v)} />
                   <FileField label="Guardian 2 Photo"    accept="image/*" />

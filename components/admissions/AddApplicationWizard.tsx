@@ -81,8 +81,8 @@ export function AddApplicationWizard({
             <LSelect     label="Applying for Class"       field="applying_for_class" value={form.applying_for_class} options={allClassOptions} onChange={set} />
             <LSelect     label="Section Preference"       field="section_preference" value={form.section_preference} options={SECTIONS} onChange={set} />
             <LSelect     label="Academic Year"            field="academic_year"      value={form.academic_year}      options={ACADEMIC_YEARS} onChange={set} />
-            <LField      label="Parent / Guardian Phone *" field="phone"             value={form.phone}              onChange={set} placeholder="98300-XXXXX" />
-            <LField      label="Email (optional)"         field="email"              value={form.email}              onChange={set} />
+            <LField      label="Parent / Guardian Phone *" field="phone" type="tel"             value={form.phone}              onChange={set} placeholder="98300-XXXXX" />
+            <LField      label="Email (optional)"         field="email" type="email"              value={form.email}              onChange={set} />
             <div className="col-span-2">
               <label className="text-[11px] font-semibold text-slate-400 uppercase block mb-1">Residential Address</label>
               <textarea rows={2} className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-[13px] resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -131,8 +131,8 @@ export function AddApplicationWizard({
               <div className="grid grid-cols-2 gap-3">
                 <LField  label="Name"       field="name"       value={form.guardian.name}       onChange={(_, v) => setG("name", v)} />
                 <LSelect label="Relation"   field="relation"   value={form.guardian.relation}   options={RELATIONS} onChange={(_, v) => setG("relation", v)} />
-                <LField  label="Phone"      field="phone"      value={form.guardian.phone}      onChange={(_, v) => setG("phone", v)} />
-                <LField  label="Email"      field="email"      value={form.guardian.email}      onChange={(_, v) => setG("email", v)} />
+                <LField  label="Phone"      field="phone" type="tel"      value={form.guardian.phone}      onChange={(_, v) => setG("phone", v)} />
+                <LField  label="Email"      field="email" type="email"      value={form.guardian.email}      onChange={(_, v) => setG("email", v)} />
                 <LField  label="Occupation" field="occupation" value={form.guardian.occupation} onChange={(_, v) => setG("occupation", v)} />
                 <LSelect label="ID Type"    field="id_type"    value={form.guardian.id_type}    options={ID_TYPES} onChange={(_, v) => setG("id_type", v)} />
                 <LField  label="ID Number"  field="id_number"  value={form.guardian.id_number}  onChange={(_, v) => setG("id_number", v)} />

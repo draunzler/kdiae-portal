@@ -97,8 +97,8 @@ export function AdmissionExpandPanel({
               <LSelect     label="Applying for Class" field="applying_for_class" value={draft.applying_for_class} options={allClassOptions} onChange={set} />
               <LSelect     label="Section Preference" field="section_preference" value={draft.section_preference} options={SECTIONS} onChange={set} />
               <LSelect     label="Academic Year"      field="academic_year"      value={draft.academic_year}      options={ACADEMIC_YEARS} onChange={set} />
-              <LField      label="Phone"              field="phone"              value={draft.phone}              onChange={set} />
-              <LField      label="Email"              field="email"              value={draft.email}              onChange={set} />
+              <LField      label="Phone"              field="phone" type="tel"              value={draft.phone}              onChange={set} />
+              <LField      label="Email"              field="email" type="email"              value={draft.email}              onChange={set} />
               <div className="col-span-4">
                 <label className="text-[11px] font-semibold text-slate-400 uppercase block mb-1">Address</label>
                 <Input value={draft.address} onChange={(e) => set("address", e.target.value)}
@@ -143,8 +143,8 @@ export function AdmissionExpandPanel({
             <div className="grid grid-cols-4 gap-3">
               <LField  label="Name"       field="name"       value={draft.guardian.name}       onChange={(_, v) => setG("name", v)} />
               <LSelect label="Relation"   field="relation"   value={draft.guardian.relation}   options={RELATIONS} onChange={(_, v) => setG("relation", v)} />
-              <LField  label="Phone"      field="phone"      value={draft.guardian.phone}      onChange={(_, v) => setG("phone", v)} />
-              <LField  label="Email"      field="email"      value={draft.guardian.email}      onChange={(_, v) => setG("email", v)} />
+              <LField  label="Phone"      field="phone" type="tel"      value={draft.guardian.phone}      onChange={(_, v) => setG("phone", v)} />
+              <LField  label="Email"      field="email" type="email"      value={draft.guardian.email}      onChange={(_, v) => setG("email", v)} />
               <LField  label="Occupation" field="occupation" value={draft.guardian.occupation} onChange={(_, v) => setG("occupation", v)} />
               <LSelect label="ID Type"    field="id_type"    value={draft.guardian.id_type}    options={ID_TYPES} onChange={(_, v) => setG("id_type", v)} />
               <LField  label="ID Number"  field="id_number"  value={draft.guardian.id_number}  onChange={(_, v) => setG("id_number", v)} />

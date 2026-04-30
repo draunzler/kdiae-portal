@@ -65,8 +65,8 @@ export function StudentExpandPanel({
               <LSelect     label="Blood Group"    field="blood_group"    value={draft.blood_group}   options={BLOOD_GROUPS} onChange={set} />
               <LSelect     label="Class"          field="class_name"     value={draft.class_name}    options={classesList} onChange={set} />
               <LSelect     label="Section"        field="section"        value={draft.section}       options={SECTIONS} onChange={set} />
-              <LField      label="Phone"          field="phone"          value={draft.phone}         onChange={set} />
-              <LField      label="Email"          field="email"          value={draft.email}         onChange={set} />
+              <LField      label="Phone"          field="phone" type="tel"          value={draft.phone}         onChange={set} />
+              <LField      label="Email"          field="email" type="email"          value={draft.email}         onChange={set} />
               <LDatePicker label="Admission Date" field="admission_date" value={draft.admission_date} onChange={set} />
               <div className="col-span-4"><Separator className="my-1" /></div>
               <p className="col-span-4 text-[11px] font-bold text-slate-400 uppercase">Fee Information</p>
@@ -126,8 +126,8 @@ export function StudentExpandPanel({
                 <div className="grid grid-cols-2 gap-3">
                   <LField  label="Name"       field="name"       value={draft.guardian.name}       onChange={(_, v) => setG("name", v)} />
                   <LSelect label="Relation"   field="relation"   value={draft.guardian.relation}   options={RELATIONS} onChange={(_, v) => setG("relation", v)} />
-                  <LField  label="Phone"      field="phone"      value={draft.guardian.phone}      onChange={(_, v) => setG("phone", v)} />
-                  <LField  label="Email"      field="email"      value={draft.guardian.email}      onChange={(_, v) => setG("email", v)} />
+                  <LField  label="Phone"      field="phone" type="tel"      value={draft.guardian.phone}      onChange={(_, v) => setG("phone", v)} />
+                  <LField  label="Email"      field="email" type="email"      value={draft.guardian.email}      onChange={(_, v) => setG("email", v)} />
                   <LField  label="Occupation" field="occupation" value={draft.guardian.occupation} onChange={(_, v) => setG("occupation", v)} />
                   <div />
                   <LSelect label="ID Type"    field="id_type"    value={draft.guardian.id_type}    options={ID_TYPES} onChange={(_, v) => setG("id_type", v)} />
@@ -149,8 +149,8 @@ export function StudentExpandPanel({
                 <div className="grid grid-cols-2 gap-3">
                   <LField  label="Name"      field="name"      value={draft.guardian2.name}      onChange={(_, v) => setG2("name", v)} />
                   <LSelect label="Relation"  field="relation"  value={draft.guardian2.relation}  options={RELATIONS} onChange={(_, v) => setG2("relation", v)} />
-                  <LField  label="Phone"     field="phone"     value={draft.guardian2.phone}     onChange={(_, v) => setG2("phone", v)} />
-                  <LField  label="Email"     field="email"     value={draft.guardian2.email}     onChange={(_, v) => setG2("email", v)} />
+                  <LField  label="Phone"     field="phone" type="tel"     value={draft.guardian2.phone}     onChange={(_, v) => setG2("phone", v)} />
+                  <LField  label="Email"     field="email" type="email"     value={draft.guardian2.email}     onChange={(_, v) => setG2("email", v)} />
                   <LSelect label="ID Type"   field="id_type"   value={draft.guardian2.id_type}   options={ID_TYPES} onChange={(_, v) => setG2("id_type", v)} />
                   <LField  label="ID Number" field="id_number" value={draft.guardian2.id_number} onChange={(_, v) => setG2("id_number", v)} />
                 </div>
