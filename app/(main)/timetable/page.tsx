@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { timetableApi, scheduleApi, type PeriodDef } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -19,30 +20,50 @@ type Timetable = Record<string, DaySchedule>;
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 const DAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+const CLASSES = ["Nursery", "Class 1", "Class 2", "Class 3", "Class 4", "Class 5", "Class 6"];
 
-const SCHOOL_START = 8 * 60;       // 480 min
-const SCHOOL_END   = 13 * 60 + 30; // 810 min
-const TOTAL_MINS   = SCHOOL_END - SCHOOL_START; // 330 min
+const DEFAULT_PERIOD_DEFS: PeriodDef[] = [
+  { id: "P1",   label: "Period 1", time_start: "08:00", time_end: "08:45", is_break: false, sort_order: 0 },
+  { id: "P2",   label: "Period 2", time_start: "08:45", time_end: "09:30", is_break: false, sort_order: 1 },
+  { id: "BRK1", label: "Break",    time_start: "09:30", time_end: "09:45", is_break: true,  sort_order: 2 },
+  { id: "P3",   label: "Period 3", time_start: "09:45", time_end: "10:30", is_break: false, sort_order: 3 },
+  { id: "P4",   label: "Period 4", time_start: "10:30", time_end: "11:15", is_break: false, sort_order: 4 },
+  { id: "LCH",  label: "Lunch",    time_start: "11:15", time_end: "12:00", is_break: true,  sort_order: 5 },
+  { id: "P5",   label: "Period 5", time_start: "12:00", time_end: "12:45", is_break: false, sort_order: 6 },
+  { id: "P6",   label: "Period 6", time_start: "12:45", time_end: "13:30", is_break: false, sort_order: 7 },
+];
+
+const DEFAULT_NURSERY_DEFS: PeriodDef[] = [
+  { id: "P1",   label: "Period 1", time_start: "08:00", time_end: "08:45", is_break: false, sort_order: 0 },
+  { id: "P2",   label: "Period 2", time_start: "08:45", time_end: "09:30", is_break: false, sort_order: 1 },
+  { id: "BRK1", label: "Break",    time_start: "09:30", time_end: "09:45", is_break: true,  sort_order: 2 },
+  { id: "P3",   label: "Period 3", time_start: "09:45", time_end: "10:30", is_break: false, sort_order: 3 },
+  { id: "P4",   label: "Period 4", time_start: "10:30", time_end: "11:15", is_break: false, sort_order: 4 },
+];
+
+function defaultDefsForClass(cls: string): PeriodDef[] {
+  return cls.toLowerCase() === "nursery" ? DEFAULT_NURSERY_DEFS : DEFAULT_PERIOD_DEFS;
+}
+
+// ── Period type ──────────────────────────────────────────────────────────────────
 
 type Period = {
   id: string;
   label: string;
   time: string;
-  startMin: number;
+  startMin: number; // relative to schoolStart
   durationMin: number;
   isBreak?: boolean;
 };
 
-const PERIODS: Period[] = [
-  { id: "P1",   label: "Period 1", time: "8:00 – 8:45",   startMin: 0,   durationMin: 45 },
-  { id: "P2",   label: "Period 2", time: "8:45 – 9:30",   startMin: 45,  durationMin: 45 },
-  { id: "BRK1", label: "Break",    time: "9:30 – 9:45",   startMin: 90,  durationMin: 15, isBreak: true },
-  { id: "P3",   label: "Period 3", time: "9:45 – 10:30",  startMin: 105, durationMin: 45 },
-  { id: "P4",   label: "Period 4", time: "10:30 – 11:15", startMin: 150, durationMin: 45 },
-  { id: "LCH",  label: "Lunch",    time: "11:15 – 12:00", startMin: 195, durationMin: 45, isBreak: true },
-  { id: "P5",   label: "Period 5", time: "12:00 – 12:45", startMin: 240, durationMin: 45 },
-  { id: "P6",   label: "Period 6", time: "12:45 – 1:30",  startMin: 285, durationMin: 45 },
-];
+// ── Period id ↔ label mapping ─────────────────────────────────────────────────
+// Derived dynamically in the component. These empty objects satisfy static imports
+// in the few places they were used before (now replaced).
+const PERIOD_ID_TO_LABEL: Record<string, string> = {};
+const PERIOD_LABEL_TO_ID: Record<string, string> = {};
+void PERIOD_ID_TO_LABEL; void PERIOD_LABEL_TO_ID;
+
+// ── Subject styles ─────────────────────────────────────────────────────────────
 
 const SUBJECT_STYLES: Record<string, { bg: string; border: string; text: string; dot: string }> = {
   Mathematics:      { bg: "bg-blue-50",    border: "border-blue-200",    text: "text-blue-800",    dot: "bg-blue-400"    },
@@ -57,36 +78,23 @@ const SUBJECT_STYLES: Record<string, { bg: string; border: string; text: string;
 
 const C = (key: string) => SUBJECT_STYLES[key] ?? SUBJECT_STYLES["Mathematics"];
 
-// ── Timetable Data ────────────────────────────────────────────────────────────
+// ── Time helpers ──────────────────────────────────────────────────────────────
 
-const INITIAL_DATA: Record<string, Timetable> = {
-  "Class 6": {
-    Monday:    { P1: { subject: "Mathematics",    teacher: "R. Sharma",     colorKey: "Mathematics"     }, P2: { subject: "English",        teacher: "P. Mukherjee",  colorKey: "English"         }, P3: { subject: "Science",        teacher: "S. Das",        colorKey: "Science"         }, P4: { subject: "Social Studies", teacher: "A. Bose",       colorKey: "Social Studies"  }, P5: { subject: "Hindi",          teacher: "M. Gupta",      colorKey: "Hindi"           }, P6: { subject: "Art",            teacher: "D. Roy",        colorKey: "Art"             } },
-    Tuesday:   { P1: { subject: "English",        teacher: "P. Mukherjee",  colorKey: "English"         }, P2: { subject: "Mathematics",    teacher: "R. Sharma",     colorKey: "Mathematics"     }, P3: { subject: "Hindi",          teacher: "M. Gupta",      colorKey: "Hindi"           }, P4: { subject: "Science",        teacher: "S. Das",        colorKey: "Science"         }, P5: { subject: "Computer Sc.",   teacher: "N. Chatterjee", colorKey: "Computer Sc."    }, P6: { subject: "Social Studies", teacher: "A. Bose",       colorKey: "Social Studies"  } },
-    Wednesday: { P1: { subject: "Science",        teacher: "S. Das",        colorKey: "Science"         }, P2: { subject: "Social Studies", teacher: "A. Bose",       colorKey: "Social Studies"  }, P3: { subject: "Mathematics",    teacher: "R. Sharma",     colorKey: "Mathematics"     }, P4: { subject: "English",        teacher: "P. Mukherjee",  colorKey: "English"         }, P5: { subject: "Art",            teacher: "D. Roy",        colorKey: "Art"             }, P6: { subject: "Phys. Ed.",      teacher: "K. Sen",        colorKey: "Phys. Ed."       } },
-    Thursday:  { P1: { subject: "Hindi",          teacher: "M. Gupta",      colorKey: "Hindi"           }, P2: { subject: "Computer Sc.",   teacher: "N. Chatterjee", colorKey: "Computer Sc."    }, P3: { subject: "English",        teacher: "P. Mukherjee",  colorKey: "English"         }, P4: { subject: "Mathematics",    teacher: "R. Sharma",     colorKey: "Mathematics"     }, P5: { subject: "Science",        teacher: "S. Das",        colorKey: "Science"         }, P6: { subject: "Social Studies", teacher: "A. Bose",       colorKey: "Social Studies"  } },
-    Friday:    { P1: { subject: "Computer Sc.",   teacher: "N. Chatterjee", colorKey: "Computer Sc."    }, P2: { subject: "Hindi",          teacher: "M. Gupta",      colorKey: "Hindi"           }, P3: { subject: "Phys. Ed.",      teacher: "K. Sen",        colorKey: "Phys. Ed."       }, P4: { subject: "Art",            teacher: "D. Roy",        colorKey: "Art"             }, P5: { subject: "Mathematics",    teacher: "R. Sharma",     colorKey: "Mathematics"     }, P6: { subject: "English",        teacher: "P. Mukherjee",  colorKey: "English"         } },
-  },
-  "Class 5": {
-    Monday:    { P1: { subject: "Hindi",          teacher: "M. Gupta",      colorKey: "Hindi"           }, P2: { subject: "Mathematics",    teacher: "R. Sharma",     colorKey: "Mathematics"     }, P3: { subject: "English",        teacher: "P. Mukherjee",  colorKey: "English"         }, P4: { subject: "Science",        teacher: "S. Das",        colorKey: "Science"         }, P5: { subject: "Social Studies", teacher: "A. Bose",       colorKey: "Social Studies"  }, P6: { subject: "Phys. Ed.",      teacher: "K. Sen",        colorKey: "Phys. Ed."       } },
-    Tuesday:   { P1: { subject: "Science",        teacher: "S. Das",        colorKey: "Science"         }, P2: { subject: "English",        teacher: "P. Mukherjee",  colorKey: "English"         }, P3: { subject: "Mathematics",    teacher: "R. Sharma",     colorKey: "Mathematics"     }, P4: { subject: "Hindi",          teacher: "M. Gupta",      colorKey: "Hindi"           }, P5: { subject: "Art",            teacher: "D. Roy",        colorKey: "Art"             }, P6: { subject: "Social Studies", teacher: "A. Bose",       colorKey: "Social Studies"  } },
-    Wednesday: { P1: { subject: "Mathematics",    teacher: "R. Sharma",     colorKey: "Mathematics"     }, P2: { subject: "Social Studies", teacher: "A. Bose",       colorKey: "Social Studies"  }, P3: { subject: "Hindi",          teacher: "M. Gupta",      colorKey: "Hindi"           }, P4: { subject: "English",        teacher: "P. Mukherjee",  colorKey: "English"         }, P5: { subject: "Computer Sc.",   teacher: "N. Chatterjee", colorKey: "Computer Sc."    }, P6: { subject: "Science",        teacher: "S. Das",        colorKey: "Science"         } },
-    Thursday:  { P1: { subject: "Social Studies", teacher: "A. Bose",       colorKey: "Social Studies"  }, P2: { subject: "Science",        teacher: "S. Das",        colorKey: "Science"         }, P3: { subject: "Art",            teacher: "D. Roy",        colorKey: "Art"             }, P4: { subject: "Computer Sc.",   teacher: "N. Chatterjee", colorKey: "Computer Sc."    }, P5: { subject: "Mathematics",    teacher: "R. Sharma",     colorKey: "Mathematics"     }, P6: { subject: "Hindi",          teacher: "M. Gupta",      colorKey: "Hindi"           } },
-    Friday:    { P1: { subject: "English",        teacher: "P. Mukherjee",  colorKey: "English"         }, P2: { subject: "Art",            teacher: "D. Roy",        colorKey: "Art"             }, P3: { subject: "Social Studies", teacher: "A. Bose",       colorKey: "Social Studies"  }, P4: { subject: "Mathematics",    teacher: "R. Sharma",     colorKey: "Mathematics"     }, P5: { subject: "Phys. Ed.",      teacher: "K. Sen",        colorKey: "Phys. Ed."       }, P6: { subject: "Computer Sc.",   teacher: "N. Chatterjee", colorKey: "Computer Sc."    } },
-  },
-};
-
-const CLASSES = ["Nursery", "Class 1", "Class 2", "Class 3", "Class 4", "Class 5", "Class 6"];
-
-function getFallback(cls: string): Timetable {
-  return INITIAL_DATA[cls] ?? INITIAL_DATA["Class 6"];
+function parseTimeToAbsMins(t: string): number {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+function absMinsToTimeStr(totalMins: number): string {
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+}
 
-function nowToMinutes(): number {
-  const now = new Date();
-  return now.getHours() * 60 + now.getMinutes() - SCHOOL_START;
+function formatTimeDisplay(t: string): string {
+  const [h, m] = t.split(":").map(Number);
+  const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h;
+  return `${h12}:${m.toString().padStart(2, "0")}`;
 }
 
 function minsToLabel(absMin: number): string {
@@ -97,6 +105,43 @@ function minsToLabel(absMin: number): string {
   return `${h12}:${m.toString().padStart(2, "0")} ${ampm}`;
 }
 
+function buildPeriodsFromDefs(defs: PeriodDef[], schoolStart: number): Period[] {
+  return [...defs]
+    .sort((a, b) => parseTimeToAbsMins(a.time_start) - parseTimeToAbsMins(b.time_start))
+    .map(def => ({
+      id: def.id,
+      label: def.label,
+      time: `${formatTimeDisplay(def.time_start)} – ${formatTimeDisplay(def.time_end)}`,
+      startMin: parseTimeToAbsMins(def.time_start) - schoolStart,
+      durationMin: parseTimeToAbsMins(def.time_end) - parseTimeToAbsMins(def.time_start),
+      isBreak: def.is_break,
+    }));
+}
+
+function schoolStartFromDefs(defs: PeriodDef[]): number {
+  if (!defs.length) return 8 * 60;
+  return Math.min(...defs.map(d => parseTimeToAbsMins(d.time_start)));
+}
+
+function schoolEndFromDefs(defs: PeriodDef[]): number {
+  if (!defs.length) return 13 * 60 + 30;
+  return Math.max(...defs.map(d => parseTimeToAbsMins(d.time_end)));
+}
+
+function emptyTimetableFromDefs(defs: PeriodDef[]): Timetable {
+  const tt: Timetable = {};
+  for (const day of DAYS) {
+    tt[day] = {};
+    for (const p of defs.filter(d => !d.is_break)) tt[day][p.id] = null;
+  }
+  return tt;
+}
+
+function nowToMinutes(): number {
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes(); // absolute mins
+}
+
 interface DragState {
   periodId: string;
   day: string;
@@ -105,16 +150,30 @@ interface DragState {
 
 // ── Time Ruler ────────────────────────────────────────────────────────────────
 
-function TimeRuler({ simMins }: { simMins: number }) {
-  const pct = Math.max(0, Math.min(100, (simMins / TOTAL_MINS) * 100));
-  const inSchool = simMins >= 0 && simMins <= TOTAL_MINS;
-  const currentLabel = minsToLabel(SCHOOL_START + Math.max(0, Math.min(TOTAL_MINS, simMins)));
+function TimeRuler({
+  simMins,
+  periods,
+  schoolStart,
+  schoolEnd,
+  totalMins,
+}: {
+  simMins: number;
+  periods: Period[];
+  schoolStart: number;
+  schoolEnd: number;
+  totalMins: number;
+}) {
+  const simRel = simMins - schoolStart;
+  const pct = Math.max(0, Math.min(100, (simRel / totalMins) * 100));
+  const inSchool = simMins >= schoolStart && simMins <= schoolEnd;
+  const currentLabel = minsToLabel(Math.max(schoolStart, Math.min(schoolEnd, simMins)));
 
-  const ticks = PERIODS.map(p => ({
+  const ticks = periods.map(p => ({
     id: p.id,
-    pct: (p.startMin / TOTAL_MINS) * 100,
-    label: minsToLabel(SCHOOL_START + p.startMin),
+    pct: (p.startMin / totalMins) * 100,
+    label: minsToLabel(schoolStart + p.startMin),
     isBreak: p.isBreak,
+
   }));
 
   return (
@@ -160,7 +219,7 @@ function TimeRuler({ simMins }: { simMins: number }) {
           {/* End tick */}
           <div className="absolute top-0 right-0 flex flex-col items-center" style={{ transform: "translateX(50%)" }}>
             <div className="w-px h-2 mt-1.5 bg-slate-300" />
-            <span className="text-[9px] text-slate-400 font-mono whitespace-nowrap mt-0.5">{minsToLabel(SCHOOL_END)}</span>
+            <span className="text-[9px] text-slate-400 font-mono whitespace-nowrap mt-0.5">{minsToLabel(schoolEnd)}</span>
           </div>
 
           {/* Now marker dot */}
@@ -178,18 +237,40 @@ function TimeRuler({ simMins }: { simMins: number }) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
+// ── Entry ID map helpers ──────────────────────────────────────────────────────
+
+function entryKey(day: string, periodId: string) { return `${day}::${periodId}`; }
+
 export default function TimetablePage() {
   const [selectedClass, setSelectedClass] = useState("Class 6");
+  const [periodDefs, setPeriodDefs] = useState<PeriodDef[]>(defaultDefsForClass("Class 6"));
   const [timetables, setTimetables] = useState<Record<string, Timetable>>(
-    Object.fromEntries(CLASSES.map(c => [c, getFallback(c)]))
+    Object.fromEntries(CLASSES.map(c => [c, emptyTimetableFromDefs(defaultDefsForClass(c))]))
   );
+  // "day::periodId" → backend entry id
+  const [entryMap, setEntryMap] = useState<Record<string, string>>({});
+  const [classLoading, setClassLoading] = useState(false);
   const [simMins, setSimMins] = useState<number>(nowToMinutes());
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [dropTarget, setDropTarget] = useState<{ periodId: string; day: string } | null>(null);
   const [activeDay, setActiveDay] = useState<string>("Monday");
 
+  // ── Derived schedule values ────────────────────────────────────────────────
+  const schoolStart = useMemo(() => schoolStartFromDefs(periodDefs), [periodDefs]);
+  const schoolEnd   = useMemo(() => schoolEndFromDefs(periodDefs), [periodDefs]);
+  const totalMins   = useMemo(() => schoolEnd - schoolStart, [schoolStart, schoolEnd]);
+  const periods     = useMemo(() => buildPeriodsFromDefs(periodDefs, schoolStart), [periodDefs, schoolStart]);
+  const periodIdToLabel = useMemo(
+    () => Object.fromEntries(periodDefs.filter(d => !d.is_break).map(d => [d.id, d.label])),
+    [periodDefs]
+  );
+  const periodLabelToId = useMemo(
+    () => Object.fromEntries(Object.entries(periodIdToLabel).map(([id, lbl]) => [lbl, id])),
+    [periodIdToLabel]
+  );
+
   const todayName = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][new Date().getDay()];
-  const data = timetables[selectedClass] ?? getFallback(selectedClass);
+  const data = timetables[selectedClass] ?? emptyTimetableFromDefs(periodDefs);
 
   // Default activeDay to today if it's a weekday
   useEffect(() => {
@@ -202,6 +283,104 @@ export default function TimetablePage() {
     return () => clearInterval(id);
   }, []);
 
+  // Load schedule on mount
+  useEffect(() => {
+    scheduleApi.get(selectedClass).then(s => { if (s.periods.length) setPeriodDefs(s.periods); }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Load class timetable + schedule from API ────────────────────────────────
+
+  const loadClass = useCallback(async (className: string) => {
+    setClassLoading(true);
+    try {
+      // Load schedule and timetable in parallel
+      const [schedResult, entries] = await Promise.all([
+        scheduleApi.get(className).catch(() => ({ periods: defaultDefsForClass(className) })),
+        timetableApi.listByClass(className).catch(() => []),
+      ]);
+      const defs = schedResult.periods.length ? schedResult.periods : defaultDefsForClass(className);
+      setPeriodDefs(defs);
+      const labelToId = Object.fromEntries(defs.filter(d => !d.is_break).map(d => [d.label, d.id]));
+      const tt = emptyTimetableFromDefs(defs);
+      const map: Record<string, string> = {};
+      for (const e of entries) {
+        const periodId = labelToId[e.period] ?? e.period;
+        if (!DAYS.includes(e.day)) continue;
+        if (!tt[e.day]) tt[e.day] = {};
+        tt[e.day][periodId] = { subject: e.subject, teacher: e.teacher, colorKey: e.subject };
+        map[entryKey(e.day, periodId)] = e.id;
+      }
+      setTimetables(prev => ({ ...prev, [className]: tt }));
+      setEntryMap(map);
+    } finally {
+      setClassLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadClass(selectedClass); }, [selectedClass, loadClass]);
+
+  // ── Period def mutations ────────────────────────────────────────────────────
+  const handleUpdatePeriodDef = useCallback((id: string, patch: Partial<PeriodDef>) => {
+    setPeriodDefs(prev => {
+      const next = prev.map(d => d.id === id ? { ...d, ...patch } : d);
+      const sorted = [...next].sort((a, b) => parseTimeToAbsMins(a.time_start) - parseTimeToAbsMins(b.time_start));
+      scheduleApi.save(selectedClass, { periods: sorted }).catch(() => {});
+      return sorted;
+    });
+  }, [selectedClass]);
+
+  const handleDeletePeriodRow = useCallback((id: string) => {
+    setPeriodDefs(prev => {
+      const next = prev.filter(d => d.id !== id);
+      scheduleApi.save(selectedClass, { periods: next }).catch(() => {});
+      return next;
+    });
+  }, [selectedClass]);
+
+  const handleAddPeriodRow = useCallback((isBreak: boolean) => {
+    setPeriodDefs(prev => {
+      const sorted = [...prev].sort((a, b) => parseTimeToAbsMins(a.time_end) - parseTimeToAbsMins(b.time_end));
+      const lastEnd = sorted.length ? parseTimeToAbsMins(sorted[sorted.length - 1].time_end) : 8 * 60;
+      const endMins = lastEnd + (isBreak ? 15 : 45);
+      const periodCount = prev.filter(d => !d.is_break).length;
+      const newDef: PeriodDef = {
+        id: `${isBreak ? "brk" : "p"}_${Date.now()}`,
+        label: isBreak ? "Break" : `Period ${periodCount + 1}`,
+        time_start: absMinsToTimeStr(lastEnd),
+        time_end: absMinsToTimeStr(endMins),
+        is_break: isBreak,
+        sort_order: prev.length,
+      };
+      const next = [...prev, newDef];
+      scheduleApi.save(selectedClass, { periods: next }).catch(() => {});
+      return next;
+    });
+  }, [selectedClass]);
+
+  const handleReorderPeriod = useCallback((dragId: string, dropId: string) => {
+    if (dragId === dropId) return;
+    setPeriodDefs(prev => {
+      const sorted = [...prev].sort((a, b) => parseTimeToAbsMins(a.time_start) - parseTimeToAbsMins(b.time_start));
+      const dragIdx = sorted.findIndex(d => d.id === dragId);
+      const dropIdx = sorted.findIndex(d => d.id === dropId);
+      if (dragIdx === -1 || dropIdx === -1) return prev;
+      const [item] = sorted.splice(dragIdx, 1);
+      sorted.splice(dropIdx, 0, item);
+      // Re-assign times: keep drag item's duration, cascade from drop position
+      // Simple swap: just swap time_start/time_end between the two
+      const a = sorted[dragIdx];
+      const b = sorted[dropIdx];
+      const tmpStart = a.time_start; const tmpEnd = a.time_end;
+      sorted[dragIdx] = { ...a, time_start: b.time_start, time_end: b.time_end };
+      sorted[dropIdx] = { ...b, time_start: tmpStart, time_end: tmpEnd };
+      scheduleApi.save(selectedClass, { periods: sorted }).catch(() => {});
+      return sorted;
+    });
+  }, [selectedClass]);
+
+  // ── Drag & drop ─────────────────────────────────────────────────────────────
+
   const handleDragStart = useCallback((periodId: string, day: string, slot: NonNullable<Slot>) => {
     setDragState({ periodId, day, slot });
   }, []);
@@ -212,41 +391,95 @@ export default function TimetablePage() {
     if (srcPeriodId === targetPeriodId && srcDay === targetDay) {
       setDragState(null); setDropTarget(null); return;
     }
+
+    // Capture current slots & ids before state update
+    const srcSlot = data[srcDay]?.[srcPeriodId];
+    const tgtSlot = data[targetDay]?.[targetPeriodId];
+    const srcId  = entryMap[entryKey(srcDay, srcPeriodId)];
+    const tgtId  = entryMap[entryKey(targetDay, targetPeriodId)];
+
+    // Optimistic local swap
     setTimetables(prev => {
       const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
-      const srcSlot = next[selectedClass][srcDay][srcPeriodId];
-      const tgtSlot = next[selectedClass][targetDay][targetPeriodId];
-      next[selectedClass][srcDay][srcPeriodId] = tgtSlot ?? null;
-      next[selectedClass][targetDay][targetPeriodId] = srcSlot;
+      next[selectedClass][srcDay][srcPeriodId]       = tgtSlot ?? null;
+      next[selectedClass][targetDay][targetPeriodId] = srcSlot ?? null;
+      return next;
+    });
+    setEntryMap(prev => {
+      const next = { ...prev };
+      if (srcId)  next[entryKey(targetDay, targetPeriodId)] = srcId;
+      else        delete next[entryKey(targetDay, targetPeriodId)];
+      if (tgtId)  next[entryKey(srcDay, srcPeriodId)] = tgtId;
+      else        delete next[entryKey(srcDay, srcPeriodId)];
       return next;
     });
     setDragState(null); setDropTarget(null);
-  }, [dragState, selectedClass]);
+
+    // Sync to API: update each entry's position
+    if (srcId) {
+      timetableApi.update(srcId, {
+        day: targetDay,
+        period: periodIdToLabel[targetPeriodId] ?? targetPeriodId,
+      }).catch(() => {});
+    }
+    if (tgtId) {
+      timetableApi.update(tgtId, {
+        day: srcDay,
+        period: periodIdToLabel[srcPeriodId] ?? srcPeriodId,
+      }).catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragState, selectedClass, data, entryMap]);
+
+  // ── Delete slot ─────────────────────────────────────────────────────────────
 
   const handleDeleteSlot = useCallback((periodId: string, day: string) => {
+    const id = entryMap[entryKey(day, periodId)];
     setTimetables(prev => {
       const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
       next[selectedClass][day][periodId] = null;
       return next;
     });
-  }, [selectedClass]);
+    if (id) {
+      setEntryMap(prev => { const n = { ...prev }; delete n[entryKey(day, periodId)]; return n; });
+      timetableApi.delete(id).catch(() => {});
+    }
+  }, [selectedClass, entryMap]);
+
+  // ── Add slot ─────────────────────────────────────────────────────────────────
 
   const handleAddSlot = useCallback((periodId: string, day: string, subject: string, teacher: string) => {
+    // Optimistic local update
     setTimetables(prev => {
       const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
       if (!next[selectedClass][day]) next[selectedClass][day] = {};
       next[selectedClass][day][periodId] = { subject, teacher, colorKey: subject };
       return next;
     });
+    // Persist to API
+    timetableApi.create({
+      teacher_email: "",
+      teacher,
+      period: periodIdToLabel[periodId] ?? periodId,
+      day,
+      subject,
+      class_name: selectedClass,
+    }).then(entry => {
+      setEntryMap(prev => ({ ...prev, [entryKey(day, periodId)]: entry.id }));
+    }).catch(() => {});
   }, [selectedClass]);
 
   const sharedProps = {
-    data, periods: PERIODS, simMins, dragState, dropTarget,
+    data, periods, periodDefs, simMins, schoolStart, totalMins, dragState, dropTarget,
     onDragStart: handleDragStart, onDrop: handleDrop,
     onDragOver: setDropTarget,
     onDragEnd: () => { setDragState(null); setDropTarget(null); },
     onDelete: handleDeleteSlot,
     onAdd: handleAddSlot,
+    onUpdatePeriodDef: handleUpdatePeriodDef,
+    onDeletePeriodRow: handleDeletePeriodRow,
+    onAddPeriodRow: handleAddPeriodRow,
+    onReorderPeriod: handleReorderPeriod,
   };
 
   return (
@@ -306,13 +539,24 @@ export default function TimetablePage() {
             </div>
           </div>
           {/* Timetable card */}
-          <Card className="shadow-none border-slate-200 overflow-hidden">
-            <TimeRuler simMins={simMins} />
+          <Card className="shadow-none border-slate-200 overflow-hidden relative">
+            {classLoading && (
+              <div className="absolute inset-0 z-20 bg-white/70 flex items-center justify-center rounded-inherit">
+                <div className="flex items-center gap-2 text-[13px] text-slate-500">
+                  <svg className="animate-spin w-4 h-4 text-[#007BFF]" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
+                  </svg>
+                  Loading timetable…
+                </div>
+              </div>
+            )}
+            <TimeRuler simMins={simMins} periods={periods} schoolStart={schoolStart} schoolEnd={schoolEnd} totalMins={totalMins} />
             <TabsContent value="week" className="mt-0">
               <WeekView {...sharedProps} days={DAYS} todayName={todayName} />
             </TabsContent>
             <TabsContent value="day" className="mt-0">
-              <DayView {...sharedProps} day={activeDay} isToday={activeDay === todayName} />
+              <DayView {...sharedProps} day={activeDay} isToday={activeDay === todayName} schoolEnd={schoolEnd} />
             </TabsContent>
           </Card>
         </Tabs>
@@ -324,10 +568,12 @@ export default function TimetablePage() {
 // ── Week View ─────────────────────────────────────────────────────────────────
 
 function WeekView({
-  data, periods, days, simMins, todayName,
+  data, periods, periodDefs, days, simMins, schoolStart, totalMins, todayName,
   dragState, dropTarget, onDragStart, onDrop, onDragOver, onDragEnd, onDelete, onAdd,
+  onUpdatePeriodDef, onDeletePeriodRow, onAddPeriodRow, onReorderPeriod,
 }: {
-  data: Timetable; periods: Period[]; days: string[]; simMins: number; todayName: string;
+  data: Timetable; periods: Period[]; periodDefs: PeriodDef[]; days: string[];
+  simMins: number; schoolStart: number; totalMins: number; todayName: string;
   dragState: DragState | null; dropTarget: { periodId: string; day: string } | null;
   onDragStart: (p: string, d: string, s: NonNullable<Slot>) => void;
   onDrop: (p: string, d: string) => void;
@@ -335,15 +581,22 @@ function WeekView({
   onDragEnd: () => void;
   onDelete: (periodId: string, day: string) => void;
   onAdd: (periodId: string, day: string, subject: string, teacher: string) => void;
+  onUpdatePeriodDef: (id: string, patch: Partial<PeriodDef>) => void;
+  onDeletePeriodRow: (id: string) => void;
+  onAddPeriodRow: (isBreak: boolean) => void;
+  onReorderPeriod: (dragId: string, dropId: string) => void;
 }) {
-  const inSchool = simMins >= 0 && simMins <= TOTAL_MINS;
+  const inSchool = simMins >= schoolStart && simMins <= schoolStart + totalMins;
+  const [editingTimeId, setEditingTimeId] = useState<string | null>(null);
+  const [rowDragId, setRowDragId] = useState<string | null>(null);
+  const [rowDropId, setRowDropId] = useState<string | null>(null);
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[780px]">
         <thead>
           <tr className="border-b border-slate-100 bg-slate-50">
-            <th className="py-3 px-4 text-left w-32">
+            <th className="py-3 px-4 text-left w-36">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Time</span>
             </th>
             {days.map(d => (
@@ -356,35 +609,115 @@ function WeekView({
         </thead>
         <tbody>
           {periods.map(p => {
-            const isCurrentPeriod = !p.isBreak && simMins >= p.startMin && simMins < p.startMin + p.durationMin;
-            const showNowLine = inSchool && simMins >= p.startMin && simMins < p.startMin + p.durationMin;
-            const nowLinePct = showNowLine ? ((simMins - p.startMin) / p.durationMin) * 100 : 0;
+            const def = periodDefs.find(d => d.id === p.id);
+            const relMins = simMins - schoolStart;
+            const isCurrentPeriod = !p.isBreak && relMins >= p.startMin && relMins < p.startMin + p.durationMin;
+            const showNowLine = inSchool && relMins >= p.startMin && relMins < p.startMin + p.durationMin;
+            const nowLinePct = showNowLine ? ((relMins - p.startMin) / p.durationMin) * 100 : 0;
+            const isRowDragOver = rowDropId === p.id && rowDragId !== p.id;
 
             return (
               <tr
                 key={p.id}
                 className={`border-b border-slate-100 transition-colors ${
-                  isCurrentPeriod ? "bg-blue-50/40" : p.isBreak ? "bg-slate-50/80" : "hover:bg-slate-50/50"
+                  isRowDragOver ? "bg-blue-50/50 outline outline-1 outline-[#007BFF]/30 outline-offset-[-1px]"
+                  : isCurrentPeriod ? "bg-blue-50/40"
+                  : p.isBreak ? "bg-slate-50/80"
+                  : "hover:bg-slate-50/50"
                 }`}
+                onDragOver={e => { if (rowDragId) { e.preventDefault(); setRowDropId(p.id); } }}
+                onDrop={e => {
+                  if (rowDragId && rowDragId !== p.id) {
+                    e.preventDefault();
+                    onReorderPeriod(rowDragId, p.id);
+                  }
+                  setRowDragId(null); setRowDropId(null);
+                }}
               >
-                {/* Period label */}
-                <td className="py-2 px-4 relative">
+                {/* Period label cell */}
+                <td className="py-2 px-4 relative group/row">
                   {showNowLine && (
                     <div
                       className="absolute left-17 right-0 flex items-center gap-1 z-20 pointer-events-none"
                       style={{ top: `${nowLinePct}%`, transform: "translateY(-50%)" }}
                     >
                       <span className="bg-[#007BFF] text-white text-[10px] font-bold px-2 py-0.5 rounded-full tabular-nums shadow-sm whitespace-nowrap">
-                        {minsToLabel(SCHOOL_START + simMins)}
+                        {minsToLabel(simMins)}
                       </span>
                     </div>
                   )}
-                  <div className="flex items-center gap-2">
-                    {isCurrentPeriod && <span className="w-1.5 h-1.5 rounded-full bg-[#007BFF] animate-pulse shrink-0" />}
-                    <div>
-                      <p className={`text-[12px] font-semibold ${isCurrentPeriod ? "text-[#007BFF]" : "text-slate-700"}`}>{p.label}</p>
-                      <p className="text-[10px] text-slate-400 font-mono">{p.time}</p>
+
+                  <div className="flex items-center gap-1.5">
+                    {/* Row drag handle */}
+                    <div
+                      draggable
+                      onDragStart={e => { e.stopPropagation(); setRowDragId(p.id); }}
+                      onDragEnd={() => { setRowDragId(null); setRowDropId(null); }}
+                      className="shrink-0 flex flex-col gap-[3px] cursor-grab active:cursor-grabbing opacity-0 group-hover/row:opacity-40 hover:!opacity-70 transition-opacity px-0.5 py-1 -ml-1 rounded"
+                      title="Drag to reorder"
+                    >
+                      {[0,1,2].map(i => (
+                        <div key={i} className="flex gap-[3px]">
+                          <div className="w-[3px] h-[3px] rounded-full bg-slate-400" />
+                          <div className="w-[3px] h-[3px] rounded-full bg-slate-400" />
+                        </div>
+                      ))}
                     </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        {isCurrentPeriod && <span className="w-1.5 h-1.5 rounded-full bg-[#007BFF] animate-pulse shrink-0" />}
+                        <p className={`text-[12px] font-semibold leading-tight ${isCurrentPeriod ? "text-[#007BFF]" : "text-slate-700"}`}>
+                          {p.label}
+                        </p>
+                      </div>
+
+                      {/* Inline time editor */}
+                      {editingTimeId === p.id && def ? (
+                        <div
+                          className="flex items-center gap-1 mt-0.5"
+                          onBlur={e => {
+                            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                              setEditingTimeId(null);
+                            }
+                          }}
+                        >
+                          <input
+                            type="time"
+                            autoFocus
+                            defaultValue={def.time_start}
+                            className="text-[10px] font-mono text-slate-500 w-[4.2rem] bg-slate-100 rounded px-1 py-0.5 border-0 focus:outline-none focus:ring-1 focus:ring-[#007BFF]/40"
+                            onBlur={e => onUpdatePeriodDef(p.id, { time_start: e.target.value })}
+                          />
+                          <span className="text-[9px] text-slate-300">–</span>
+                          <input
+                            type="time"
+                            defaultValue={def.time_end}
+                            className="text-[10px] font-mono text-slate-500 w-[4.2rem] bg-slate-100 rounded px-1 py-0.5 border-0 focus:outline-none focus:ring-1 focus:ring-[#007BFF]/40"
+                            onBlur={e => onUpdatePeriodDef(p.id, { time_end: e.target.value })}
+                          />
+                        </div>
+                      ) : (
+                        <p
+                          className="text-[10px] text-slate-400 font-mono mt-0.5 cursor-text hover:text-[#007BFF] hover:underline decoration-dotted transition-colors leading-tight"
+                          title="Click to edit time"
+                          onClick={() => setEditingTimeId(p.id)}
+                        >
+                          {p.time}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Delete row button */}
+                    <button
+                      onClick={() => onDeletePeriodRow(p.id)}
+                      className="shrink-0 text-slate-200 hover:text-red-400 transition-colors opacity-0 group-hover/row:opacity-100 ml-auto"
+                      title="Remove row"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <polyline points="2,3 10,3"/><path d="M4,3V2h4v1"/><path d="M3,3l.7,7.3a.7.7 0 0 0 .7.7h3.2a.7.7 0 0 0 .7-.7L9,3"/>
+                      </svg>
+                    </button>
                   </div>
                 </td>
 
@@ -435,6 +768,29 @@ function WeekView({
             );
           })}
         </tbody>
+        <tfoot>
+          <tr className="border-t border-dashed border-slate-200">
+            <td colSpan={days.length + 1} className="py-2 px-4">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => onAddPeriodRow(false)}
+                  className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-[#007BFF] transition-colors font-medium"
+                >
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2"><line x1="6" y1="1" x2="6" y2="11"/><line x1="1" y1="6" x2="11" y2="6"/></svg>
+                  Add period
+                </button>
+                <span className="text-slate-200">·</span>
+                <button
+                  onClick={() => onAddPeriodRow(true)}
+                  className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-600 transition-colors font-medium"
+                >
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2"><line x1="6" y1="1" x2="6" y2="11"/><line x1="1" y1="6" x2="11" y2="6"/></svg>
+                  Add break
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tfoot>
       </table>
     </div>
   );
@@ -443,10 +799,10 @@ function WeekView({
 // ── Day View ──────────────────────────────────────────────────────────────────
 
 function DayView({
-  data, periods, day, simMins, isToday,
+  data, periods, day, simMins, schoolStart, totalMins, schoolEnd, isToday,
   dragState, dropTarget, onDragStart, onDrop, onDragOver, onDragEnd, onDelete, onAdd,
 }: {
-  data: Timetable; periods: Period[]; day: string; simMins: number; isToday: boolean;
+  data: Timetable; periods: Period[]; day: string; simMins: number; schoolStart: number; totalMins: number; schoolEnd: number; isToday: boolean;
   dragState: DragState | null; dropTarget: { periodId: string; day: string } | null;
   onDragStart: (p: string, d: string, s: NonNullable<Slot>) => void;
   onDrop: (p: string, d: string) => void;
@@ -457,19 +813,18 @@ function DayView({
 }) {
   // 2px per minute
   const PX_PER_MIN = 2;
-  const totalH = TOTAL_MINS * PX_PER_MIN;
+  const totalH = totalMins * PX_PER_MIN;
 
-  // Hour grid lines: 8:00, 9:00, 10:00, 11:00, 12:00, 13:00, 13:30
   const hourTicks: { label: string; offsetMin: number }[] = [];
-  for (let m = SCHOOL_START; m <= SCHOOL_END; m += 60) {
-    hourTicks.push({ label: minsToLabel(m), offsetMin: m - SCHOOL_START });
+  for (let m = schoolStart; m <= schoolEnd; m += 60) {
+    hourTicks.push({ label: minsToLabel(m), offsetMin: m - schoolStart });
   }
-  if (hourTicks[hourTicks.length - 1].offsetMin < TOTAL_MINS) {
-    hourTicks.push({ label: minsToLabel(SCHOOL_END), offsetMin: TOTAL_MINS });
+  if (hourTicks[hourTicks.length - 1].offsetMin < totalMins) {
+    hourTicks.push({ label: minsToLabel(schoolEnd), offsetMin: totalMins });
   }
 
-  const inSchool = simMins >= 0 && simMins <= TOTAL_MINS;
-  const nowTop = simMins * PX_PER_MIN;
+  const inSchool = simMins >= schoolStart && simMins <= schoolEnd;
+  const nowTop = (simMins - schoolStart) * PX_PER_MIN;
 
   return (
     <div className="p-4">
@@ -502,7 +857,7 @@ function DayView({
             >
               <span className="flex items-center gap-1 bg-[#007BFF] text-white text-[10px] font-bold px-2 py-0.5 rounded-full tabular-nums shadow-sm -translate-y-1/2 whitespace-nowrap">
                 <span className="w-1.5 h-1.5 rounded-full bg-white/80 animate-pulse shrink-0" />
-                {minsToLabel(SCHOOL_START + simMins)}
+                {minsToLabel(simMins)}
               </span>
             </div>
           )}
