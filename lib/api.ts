@@ -112,9 +112,11 @@ async function apiFetch<T>(
   const token = await getValidToken();
 
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
   };
+  if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(`${API_URL}${path}`, {
@@ -303,5 +305,373 @@ export const classesApi = {
 
   delete(id: string): Promise<void> {
     return apiFetch<void>(`/api/classes/${id}`, { method: "DELETE" });
+  },
+};
+
+// ── Timetable ─────────────────────────────────────────────────────────────────
+
+export interface TimetableEntry {
+  id: string;
+  teacher_email: string;
+  teacher: string;
+  period: string;
+  day: string;
+  subject: string;
+  class_name: string;
+  color: string;
+}
+
+export interface TimetableEntryCreate {
+  teacher_email: string;
+  teacher: string;
+  period: string;
+  day: string;
+  subject: string;
+  class_name: string;
+  color?: string;
+}
+
+export const timetableApi = {
+  listByClass(className: string): Promise<TimetableEntry[]> {
+    return apiFetch<TimetableEntry[]>(
+      `/api/timetable?class_name=${encodeURIComponent(className)}`
+    );
+  },
+
+  create(body: TimetableEntryCreate): Promise<TimetableEntry> {
+    return apiFetch<TimetableEntry>("/api/timetable", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  delete(id: string): Promise<void> {
+    return apiFetch<void>(`/api/timetable/${id}`, { method: "DELETE" });
+  },
+
+  update(id: string, body: Partial<TimetableEntryCreate>): Promise<TimetableEntry> {
+    return apiFetch<TimetableEntry>(`/api/timetable/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  },
+};
+
+// ── Schedule ──────────────────────────────────────────────────────────────────
+
+export interface PeriodDef {
+  id: string;
+  label: string;
+  time_start: string;  // "HH:MM"
+  time_end: string;    // "HH:MM"
+  is_break: boolean;
+  sort_order: number;
+}
+
+export interface SchedulePayload {
+  periods: PeriodDef[];
+}
+
+export const scheduleApi = {
+  get(className: string): Promise<SchedulePayload> {
+    return apiFetch<SchedulePayload>(`/api/schedule?class_name=${encodeURIComponent(className)}`);
+  },
+
+  save(className: string, body: SchedulePayload): Promise<SchedulePayload> {
+    return apiFetch<SchedulePayload>(`/api/schedule?class_name=${encodeURIComponent(className)}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  },
+};
+
+// ── Exams ────────────────────────────────────────────────────────────────────
+
+export interface Exam {
+  id: string;
+  name: string;
+  term: string;
+  session: string;
+  start_date: string;
+  end_date: string;
+  classes: string;
+  status: string;
+}
+
+export interface SubjectMark {
+  subject: string;
+  marks: number;
+  max_marks: number;
+}
+
+export interface ExamResult {
+  id: string;
+  exam_id: string;
+  student_name: string;
+  student_id: string;
+  class_name: string;
+  marks: SubjectMark[];
+  grade: string;
+  remarks: string;
+  total: number;
+  percentage: number;
+}
+
+export interface GradeRule {
+  grade: string;
+  min_pct: number;
+  max_pct: number;
+  remark: string;
+}
+
+export interface GradingScale {
+  rules: GradeRule[];
+}
+
+export interface CsvUploadSummary {
+  exam_id: string;
+  inserted: number;
+  skipped: number;
+  errors: string[];
+}
+
+export interface ExamCreatePayload {
+  name: string;
+  term: string;
+  session: string;
+  start_date: string;
+  end_date: string;
+  classes: string;
+  status?: string;
+}
+
+export const examsApi = {
+  list(status?: string): Promise<Exam[]> {
+    const q = status ? `?status=${encodeURIComponent(status)}` : "";
+    return apiFetch<Exam[]>(`/api/exams${q}`);
+  },
+
+  create(body: ExamCreatePayload): Promise<Exam> {
+    return apiFetch<Exam>("/api/exams", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  update(id: string, body: Partial<ExamCreatePayload>): Promise<Exam> {
+    return apiFetch<Exam>(`/api/exams/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  },
+
+  remove(id: string): Promise<void> {
+    return apiFetch<void>(`/api/exams/${id}`, { method: "DELETE" });
+  },
+
+  results(examId: string, className?: string): Promise<ExamResult[]> {
+    const q = className ? `?class_name=${encodeURIComponent(className)}` : "";
+    return apiFetch<ExamResult[]>(`/api/exams/${examId}/results${q}`);
+  },
+
+  uploadResultsCsv(examId: string, file: File): Promise<CsvUploadSummary> {
+    const form = new FormData();
+    form.append("file", file);
+    return apiFetch<CsvUploadSummary>(`/api/exams/${examId}/results/upload-csv`, {
+      method: "POST",
+      body: form,
+    });
+  },
+
+  grading(): Promise<GradingScale> {
+    return apiFetch<GradingScale>("/api/exams/grading");
+  },
+
+  saveGrading(rules: GradeRule[]): Promise<GradingScale> {
+    return apiFetch<GradingScale>("/api/exams/grading", {
+      method: "PUT",
+      body: JSON.stringify({ rules }),
+    });
+  },
+};
+
+// ── Attendance ───────────────────────────────────────────────────────────────
+
+export interface AttendanceTrendPoint {
+  month: string;
+  overall: number;
+  class3: number;
+  class5: number;
+  class6: number;
+}
+
+export interface ClassAttendanceItem {
+  class_name: string;
+  avg: number;
+  total: number;
+  present: number;
+}
+
+export interface DefaulterItem {
+  name: string;
+  class_name: string;
+  attendance: number;
+}
+
+export interface DailyRecordItem {
+  student: string;
+  class_name: string;
+  mon: boolean;
+  tue: boolean;
+  wed: boolean;
+  thu: boolean;
+  fri: boolean;
+}
+
+export interface AttendanceStats {
+  overall_attendance: number;
+  total_students: number;
+  present_today: number;
+  below_threshold: number;
+}
+
+export interface AttendanceDashboard {
+  stats: AttendanceStats;
+  monthly_trend: AttendanceTrendPoint[];
+  class_attendance: ClassAttendanceItem[];
+  defaulters: DefaulterItem[];
+  daily_records: DailyRecordItem[];
+}
+
+export const attendanceApi = {
+  dashboard(threshold = 75, dailyLimit = 50): Promise<AttendanceDashboard> {
+    const q = new URLSearchParams();
+    q.set("threshold", String(threshold));
+    q.set("daily_limit", String(dailyLimit));
+    return apiFetch<AttendanceDashboard>(`/api/attendance/dashboard?${q.toString()}`);
+  },
+};
+
+// ── Transport ────────────────────────────────────────────────────────────────
+
+export interface TransportRoute {
+  id: string;
+  name: string;
+  bus: string;
+  time: string;
+  stops: string[];
+  driver: string;
+  phone: string;
+  capacity: number;
+  students: number;
+}
+
+export interface TransportStudent {
+  id: string;
+  name: string;
+  class_name: string;
+  route: string;
+  pickup: string;
+  status: string;
+}
+
+export interface TransportDashboard {
+  routes: TransportRoute[];
+  students: TransportStudent[];
+}
+
+export const transportApi = {
+  dashboard(): Promise<TransportDashboard> {
+    return apiFetch<TransportDashboard>("/api/transport/dashboard");
+  },
+
+  listRoutes(): Promise<TransportRoute[]> {
+    return apiFetch<TransportRoute[]>("/api/transport/routes");
+  },
+
+  listStudents(): Promise<TransportStudent[]> {
+    return apiFetch<TransportStudent[]>("/api/transport/students");
+  },
+};
+
+// ── Gallery (Cloudflare R2) ─────────────────────────────────────────────────
+
+export interface GalleryObject {
+  key: string;
+  size: number;
+  last_modified: string | null;
+  etag: string;
+  url: string;
+}
+
+export interface GalleryFolder {
+  prefix: string;
+  name: string;
+}
+
+export interface GalleryList {
+  prefix: string;
+  folders: GalleryFolder[];
+  files: GalleryObject[];
+}
+
+export interface GalleryPresignOut {
+  key: string;
+  url: string;
+  method: string;
+  expires_in: number;
+}
+
+export const galleryApi = {
+  list(prefix = ""): Promise<GalleryList> {
+    return apiFetch<GalleryList>(`/api/gallery/list?prefix=${encodeURIComponent(prefix)}`);
+  },
+
+  listObjects(prefix = "", limit = 200): Promise<GalleryObject[]> {
+    return apiFetch<GalleryObject[]>(`/api/gallery/objects?prefix=${encodeURIComponent(prefix)}&limit=${limit}`);
+  },
+
+  createFolder(prefix: string): Promise<{ prefix: string; marker: string }> {
+    return apiFetch<{ prefix: string; marker: string }>("/api/gallery/folders", {
+      method: "POST",
+      body: JSON.stringify({ prefix }),
+    });
+  },
+
+  renameFolder(oldPrefix: string, newPrefix: string): Promise<{ moved: number; old_prefix: string; new_prefix: string }> {
+    return apiFetch<{ moved: number; old_prefix: string; new_prefix: string }>("/api/gallery/folders/rename", {
+      method: "PATCH",
+      body: JSON.stringify({ old_prefix: oldPrefix, new_prefix: newPrefix }),
+    });
+  },
+
+  deleteFolder(prefix: string): Promise<{ deleted: number; prefix: string }> {
+    return apiFetch<{ deleted: number; prefix: string }>(`/api/gallery/folders?prefix=${encodeURIComponent(prefix)}&recursive=true`, {
+      method: "DELETE",
+    });
+  },
+
+  presignUpload(key: string, contentType: string, expiresIn = 900): Promise<GalleryPresignOut> {
+    return apiFetch<GalleryPresignOut>("/api/gallery/files/presign-upload", {
+      method: "POST",
+      body: JSON.stringify({ key, content_type: contentType, expires_in: expiresIn }),
+    });
+  },
+
+  presignDownload(key: string, expiresIn = 900): Promise<GalleryPresignOut> {
+    return apiFetch<GalleryPresignOut>(`/api/gallery/files/presign-download?key=${encodeURIComponent(key)}&expires_in=${expiresIn}`);
+  },
+
+  renameFile(oldKey: string, newKey: string): Promise<{ moved: boolean; old_key: string; new_key: string }> {
+    return apiFetch<{ moved: boolean; old_key: string; new_key: string }>("/api/gallery/files/rename", {
+      method: "PATCH",
+      body: JSON.stringify({ old_key: oldKey, new_key: newKey }),
+    });
+  },
+
+  deleteFile(key: string): Promise<{ deleted: boolean; key: string }> {
+    return apiFetch<{ deleted: boolean; key: string }>(`/api/gallery/files?key=${encodeURIComponent(key)}`, {
+      method: "DELETE",
+    });
   },
 };
