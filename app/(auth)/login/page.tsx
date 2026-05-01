@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faEye, faEyeSlash, faShield } from "@fortawesome/free-solid-svg-icons";
@@ -30,7 +29,6 @@ export default function LoginPage() {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
-  const [rememberMe, setRememberMe] = React.useState(false);
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
 
@@ -164,16 +162,8 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Remember me + Forgot */}
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <Checkbox
-                  checked={rememberMe}
-                  onCheckedChange={(v) => setRememberMe(!!v)}
-                  className="border-slate-300"
-                />
-                <span className="text-[13px] text-slate-600">Remember me</span>
-              </label>
+            {/* Forgot */}
+            <div className="flex items-center justify-end">
               <button
                 type="button"
                 className="text-[13px] text-slate-600 underline underline-offset-2 hover:text-[#007BFF] transition-colors"
