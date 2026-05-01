@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { galleryApi } from "@/lib/api";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,37 +60,82 @@ function formatDate(iso: string) {
   });
 }
 
-// ── Initial seed data ─────────────────────────────────────────────────────────
+function hashColor(value: string) {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) hash = (hash * 31 + value.charCodeAt(i)) | 0;
+  return FOLDER_COLORS[Math.abs(hash) % FOLDER_COLORS.length];
+}
 
-const INITIAL_FOLDERS: Folder[] = [
-  { id: "root",      name: "Gallery",           parentId: null,     createdAt: "2025-01-01", color: "#3B82F6" },
-  { id: "f1",        name: "Annual Day 2025",   parentId: "root",   createdAt: "2025-03-10", color: "#FFCA2B" },
-  { id: "f2",        name: "Sports Meet",       parentId: "root",   createdAt: "2025-02-15", color: "#10B981" },
-  { id: "f3",        name: "Science Fair",      parentId: "root",   createdAt: "2025-01-22", color: "#8B5CF6" },
-  { id: "f1-1",      name: "Rehearsals",        parentId: "f1",     createdAt: "2025-03-05", color: "#F97316" },
-  { id: "f1-2",      name: "Main Event",        parentId: "f1",     createdAt: "2025-03-11", color: "#F43F5E" },
-  { id: "f1-2-1",    name: "Stage Performances",parentId: "f1-2",   createdAt: "2025-03-11", color: "#06B6D4" },
-  { id: "f2-1",      name: "Athletics",         parentId: "f2",     createdAt: "2025-02-14", color: "#84CC16" },
-  { id: "f2-2",      name: "Team Sports",       parentId: "f2",     createdAt: "2025-02-14", color: "#FFCA2B" },
-];
+function getParentPrefix(prefix: string): string {
+  const p = prefix.endsWith("/") ? prefix.slice(0, -1) : prefix;
+  const idx = p.lastIndexOf("/");
+  return idx >= 0 ? `${p.slice(0, idx + 1)}` : "";
+}
 
-const PLACEHOLDER_IMGS = [
-  "https://picsum.photos/seed/a1/600/400",
-  "https://picsum.photos/seed/b2/600/400",
-  "https://picsum.photos/seed/c3/600/400",
-  "https://picsum.photos/seed/d4/600/400",
-  "https://picsum.photos/seed/e5/600/400",
-  "https://picsum.photos/seed/f6/600/400",
-];
+function baseName(path: string): string {
+  const p = path.endsWith("/") ? path.slice(0, -1) : path;
+  const idx = p.lastIndexOf("/");
+  return idx >= 0 ? p.slice(idx + 1) : p;
+}
 
-const INITIAL_MEDIA: MediaFile[] = [
-  { id: "m1", name: "opening_ceremony.jpg",  type: "image", url: PLACEHOLDER_IMGS[0], size: 2_340_000, uploadedAt: "2025-03-11", folderId: "f1-2", mimeType: "image/jpeg" },
-  { id: "m2", name: "dance_group.jpg",       type: "image", url: PLACEHOLDER_IMGS[1], size: 1_870_000, uploadedAt: "2025-03-11", folderId: "f1-2", mimeType: "image/jpeg" },
-  { id: "m3", name: "drama_club.jpg",        type: "image", url: PLACEHOLDER_IMGS[2], size: 3_100_000, uploadedAt: "2025-03-11", folderId: "f1-2-1", mimeType: "image/jpeg" },
-  { id: "m4", name: "rehearsal_1.jpg",       type: "image", url: PLACEHOLDER_IMGS[3], size: 980_000,   uploadedAt: "2025-03-05", folderId: "f1-1", mimeType: "image/jpeg" },
-  { id: "m5", name: "100m_sprint.jpg",       type: "image", url: PLACEHOLDER_IMGS[4], size: 2_100_000, uploadedAt: "2025-02-14", folderId: "f2-1", mimeType: "image/jpeg" },
-  { id: "m6", name: "football_final.jpg",    type: "image", url: PLACEHOLDER_IMGS[5], size: 1_560_000, uploadedAt: "2025-02-15", folderId: "f2-2", mimeType: "image/jpeg" },
-];
+function getFileType(name: string): MediaType {
+  const lower = name.toLowerCase();
+  if (lower.endsWith(".mp4") || lower.endsWith(".mov") || lower.endsWith(".webm") || lower.endsWith(".avi")) {
+    return "video";
+  }
+  return "image";
+}
+
+function parseGallery(objects: Array<{ key: string; size: number; last_modified: string | null; url: string }>) {
+  const foldersMap = new Map<string, Folder>();
+  foldersMap.set("root", {
+    id: "root",
+    name: "Gallery",
+    parentId: null,
+    createdAt: new Date().toISOString().slice(0, 10),
+    color: "#3B82F6",
+  });
+
+  const mediaFiles: MediaFile[] = [];
+
+  for (const obj of objects) {
+    const key = obj.key;
+    if (!key) continue;
+
+    const parts = key.split("/").filter(Boolean);
+    let prefix = "";
+    for (let i = 0; i < parts.length - 1; i += 1) {
+      prefix += `${parts[i]}/`;
+      if (!foldersMap.has(prefix)) {
+        const parentPrefix = getParentPrefix(prefix);
+        foldersMap.set(prefix, {
+          id: prefix,
+          name: baseName(prefix),
+          parentId: parentPrefix || "root",
+          createdAt: new Date().toISOString().slice(0, 10),
+          color: hashColor(prefix),
+        });
+      }
+    }
+
+    if (key.endsWith(".keep")) continue;
+
+    const parentPrefix = getParentPrefix(key);
+    const folderId = parentPrefix || "root";
+    mediaFiles.push({
+      id: key,
+      name: baseName(key),
+      type: getFileType(key),
+      url: obj.url || "",
+      size: obj.size,
+      uploadedAt: obj.last_modified ? new Date(obj.last_modified).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+      folderId,
+      mimeType: getFileType(key) === "video" ? "video/*" : "image/*",
+    });
+  }
+
+  return { folders: Array.from(foldersMap.values()), mediaFiles };
+}
 
 // ── FolderTree Component ──────────────────────────────────────────────────────
 
@@ -293,12 +339,18 @@ function Lightbox({
       )}
 
       <div onClick={e => e.stopPropagation()} className="flex flex-col items-center max-w-5xl w-full px-16">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={file.url}
-          alt={file.name}
-          className="max-h-[75vh] max-w-full object-contain rounded-lg shadow-2xl"
-        />
+        {file.url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={file.url}
+            alt={file.name}
+            className="max-h-[75vh] max-w-full object-contain rounded-lg shadow-2xl"
+          />
+        ) : (
+          <div className="w-full max-w-3xl h-[320px] rounded-lg bg-slate-800/80 border border-white/10 flex items-center justify-center text-white/70 text-sm">
+            Preview unavailable (set R2_PUBLIC_BASE_URL or use download)
+          </div>
+        )}
         <div className="mt-4 text-white/80 text-sm text-center">
           <p className="font-medium text-white">{file.name}</p>
           <p className="text-xs mt-0.5 text-white/50">
@@ -313,8 +365,8 @@ function Lightbox({
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function GalleryPage() {
-  const [folders, setFolders] = useState<Folder[]>(INITIAL_FOLDERS);
-  const [mediaFiles, setMediaFiles] = useState<MediaFile[]>(INITIAL_MEDIA);
+  const [folders, setFolders] = useState<Folder[]>([{ id: "root", name: "Gallery", parentId: null, createdAt: new Date().toISOString().slice(0, 10), color: "#3B82F6" }]);
+  const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [currentFolderId, setCurrentFolderId] = useState("root");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [search, setSearch] = useState("");
@@ -327,7 +379,29 @@ export default function GalleryPage() {
   const [uploadProgress, setUploadProgress] = useState<{ name: string; progress: number }[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [renameName, setRenameName] = useState("");
+  const [loading, setLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const currentPrefix = currentFolderId === "root" ? "" : currentFolderId;
+
+  const refreshGallery = useCallback(async () => {
+    setLoading(true);
+    try {
+      const objects = await galleryApi.listObjects("");
+      const parsed = parseGallery(objects);
+      setFolders(parsed.folders);
+      setMediaFiles(parsed.mediaFiles);
+    } catch {
+      setFolders([{ id: "root", name: "Gallery", parentId: null, createdAt: new Date().toISOString().slice(0, 10), color: "#3B82F6" }]);
+      setMediaFiles([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshGallery();
+  }, [refreshGallery]);
 
   const currentFolder = folders.find(f => f.id === currentFolderId)!;
   const breadcrumb = getBreadcrumb(folders, currentFolderId);
@@ -348,22 +422,17 @@ export default function GalleryPage() {
     setCtxMenu({ x: e.clientX, y: e.clientY, type, id });
   }
 
-  function handleDelete(id: string, type: "folder" | "file") {
+  async function handleDelete(id: string, type: "folder" | "file") {
     if (type === "folder") {
-      // Recursively delete folder and all children
-      function collectIds(folderId: string): string[] {
-        const children = folders.filter(f => f.parentId === folderId).map(f => f.id);
-        return [folderId, ...children.flatMap(collectIds)];
+      if (id === "root") return;
+      await galleryApi.deleteFolder(id);
+      if (currentFolderId === id || currentFolderId.startsWith(id)) {
+        setCurrentFolderId(folders.find(f => f.id === id)?.parentId ?? "root");
       }
-      const toDelete = new Set(collectIds(id));
-      setFolders(prev => prev.filter(f => !toDelete.has(f.id)));
-      setMediaFiles(prev => prev.filter(m => !toDelete.has(m.folderId)));
-      if (toDelete.has(currentFolderId)) {
-        const parent = folders.find(f => f.id === id)?.parentId ?? "root";
-        setCurrentFolderId(parent);
-      }
+      await refreshGallery();
     } else {
-      setMediaFiles(prev => prev.filter(m => m.id !== id));
+      await galleryApi.deleteFile(id);
+      await refreshGallery();
     }
   }
 
@@ -375,75 +444,68 @@ export default function GalleryPage() {
     setRenameName(name);
   }
 
-  function handleRenameSubmit() {
+  async function handleRenameSubmit() {
     if (!renameDialog || !renameName.trim()) return;
     if (renameDialog.type === "folder") {
-      setFolders(prev => prev.map(f => f.id === renameDialog.id ? { ...f, name: renameName.trim() } : f));
+      if (renameDialog.id === "root") return;
+      const folder = folders.find(f => f.id === renameDialog.id);
+      const parentPrefix = folder?.parentId && folder.parentId !== "root" ? folder.parentId : "";
+      const newPrefix = `${parentPrefix}${renameName.trim()}/`;
+      await galleryApi.renameFolder(renameDialog.id, newPrefix);
+      if (currentFolderId === renameDialog.id) setCurrentFolderId(newPrefix);
     } else {
-      setMediaFiles(prev => prev.map(m => m.id === renameDialog.id ? { ...m, name: renameName.trim() } : m));
+      const file = mediaFiles.find(m => m.id === renameDialog.id);
+      if (!file) return;
+      const parentPrefix = getParentPrefix(file.id);
+      const newKey = `${parentPrefix}${renameName.trim()}`;
+      await galleryApi.renameFile(file.id, newKey);
     }
+    await refreshGallery();
     setRenameDialog(null);
   }
 
-  function handleNewFolder() {
+  async function handleNewFolder() {
     if (!newFolderName.trim()) return;
-    const newFolder: Folder = {
-      id: generateId(),
-      name: newFolderName.trim(),
-      parentId: currentFolderId,
-      createdAt: new Date().toISOString().slice(0, 10),
-      color: newFolderColor,
-    };
-    setFolders(prev => [...prev, newFolder]);
+    const prefix = `${currentPrefix}${newFolderName.trim()}/`;
+    await galleryApi.createFolder(prefix);
+    await refreshGallery();
     setNewFolderDialog(false);
     setNewFolderName("");
     setNewFolderColor(FOLDER_COLORS[0]);
   }
 
-  function simulateUpload(files: File[]) {
+  async function uploadFiles(files: File[]) {
     const items = files.map(f => ({ name: f.name, progress: 0 }));
     setUploadProgress(prev => [...prev, ...items]);
 
-    files.forEach((file, fileIdx) => {
-      const startIdx = uploadProgress.length + fileIdx;
-      let progress = 0;
-      const interval = setInterval(() => {
-        progress += Math.random() * 25 + 5;
-        if (progress >= 100) {
-          progress = 100;
-          clearInterval(interval);
-          // Add to state
-          const url = URL.createObjectURL(file);
-          const newFile: MediaFile = {
-            id: generateId(),
-            name: file.name,
-            type: file.type.startsWith("video") ? "video" : "image",
-            url,
-            size: file.size,
-            uploadedAt: new Date().toISOString().slice(0, 10),
-            folderId: currentFolderId,
-            mimeType: file.type,
-          };
-          setMediaFiles(prev => [...prev, newFile]);
-          setUploadProgress(prev => prev.filter((_, i) => i !== startIdx));
-        } else {
-          setUploadProgress(prev => prev.map((item, i) =>
-            i === startIdx ? { ...item, progress } : item
-          ));
-        }
-      }, 150);
-    });
+    for (const file of files) {
+      try {
+        setUploadProgress(prev => prev.map(it => it.name === file.name ? { ...it, progress: 20 } : it));
+        const key = `${currentPrefix}${file.name}`;
+        const signed = await galleryApi.presignUpload(key, file.type || "application/octet-stream");
+        await fetch(signed.url, {
+          method: "PUT",
+          headers: { "Content-Type": file.type || "application/octet-stream" },
+          body: file,
+        });
+        setUploadProgress(prev => prev.map(it => it.name === file.name ? { ...it, progress: 100 } : it));
+      } catch {
+        setUploadProgress(prev => prev.map(it => it.name === file.name ? { ...it, progress: 100 } : it));
+      }
+    }
+    setUploadProgress([]);
+    await refreshGallery();
   }
 
   function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
-    if (e.target.files) simulateUpload(Array.from(e.target.files));
+    if (e.target.files) uploadFiles(Array.from(e.target.files));
     e.target.value = "";
   }
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     setDragOver(false);
-    if (e.dataTransfer.files.length) simulateUpload(Array.from(e.dataTransfer.files));
+    if (e.dataTransfer.files.length) uploadFiles(Array.from(e.dataTransfer.files));
   }
 
   // Total stats
@@ -598,6 +660,14 @@ export default function GalleryPage() {
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto px-5 py-4">
+              {loading ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                  {Array.from({ length: 12 }).map((_, i) => (
+                    <div key={`sk-${i}`} className="h-28 rounded-xl border border-slate-100 bg-slate-50 animate-pulse" />
+                  ))}
+                </div>
+              ) : (
+                <>
               {/* Subfolders */}
               {filteredFolders.length > 0 && (
                 <section className="mb-5">
@@ -783,6 +853,8 @@ export default function GalleryPage() {
                   )}
                 </div>
               )}
+                </>
+              )}
             </div>
           </main>
         </div>
@@ -794,14 +866,14 @@ export default function GalleryPage() {
           onClose={() => setCtxMenu(null)}
           onRename={handleRenameOpen}
           onDelete={handleDelete}
-          onDownload={id => {
+          onDownload={async id => {
             const file = mediaFiles.find(m => m.id === id);
-            if (file) {
-              const a = document.createElement("a");
-              a.href = file.url;
-              a.download = file.name;
-              a.click();
-            }
+            if (!file) return;
+            const signed = await galleryApi.presignDownload(file.id);
+            const a = document.createElement("a");
+            a.href = signed.url;
+            a.download = file.name;
+            a.click();
           }}
         />
       )}
