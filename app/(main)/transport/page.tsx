@@ -1,45 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faBus, faPlus, faLocationDot } from "@fortawesome/free-solid-svg-icons";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-
-// ── Data ─────────────────────────────────────────────────────────────────────
-
-const ROUTES = [
-  {
-    id: "R001", name: "North Route", bus: "WB 02 F 1001", time: "7:15 AM",
-    stops: ["Dum Dum", "Lake Town", "Ultadanga", "Salt Lake Sec-V"],
-    driver: "Ratan Mondal", phone: "+91 99001-10001", capacity: 35, students: 28,
-  },
-  {
-    id: "R002", name: "South Route", bus: "WB 02 F 1002", time: "7:05 AM",
-    stops: ["Behala", "Taratala", "New Alipore", "Tollygunge"],
-    driver: "Sujit Halder", phone: "+91 99001-10002", capacity: 35, students: 32,
-  },
-  {
-    id: "R003", name: "East Route", bus: "WB 02 F 1003", time: "7:20 AM",
-    stops: ["Sonarpur", "Santoshpur", "Kasba", "Garia"],
-    driver: "Manas Karmakar", phone: "+91 99001-10003", capacity: 40, students: 25,
-  },
-  {
-    id: "R004", name: "West Route", bus: "WB 02 F 1004", time: "7:10 AM",
-    stops: ["Santragachi", "Liluah", "Shibpur", "Howrah St."],
-    driver: "Pintu Roy", phone: "+91 99001-10004", capacity: 35, students: 30,
-  },
-];
-
-const STUDENT_TRANSPORT = [
-  { name: "Priya Chatterjee", class: "Class 5-A", route: "North Route", pickup: "Lake Town",  status: "Active"    },
-  { name: "Arjun Mukherjee",  class: "Class 6-B", route: "South Route", pickup: "Tollygunge", status: "Active"    },
-  { name: "Tanya Roy",        class: "Class 5-B", route: "East Route",  pickup: "Kasba",       status: "Active"    },
-  { name: "Rohan Das",        class: "Class 3-C", route: "West Route",  pickup: "Liluah",      status: "Suspended" },
-  { name: "Sneha Banerjee",   class: "Class 4-A", route: "South Route", pickup: "Behala",      status: "Active"    },
-];
+import { Skeleton } from "@/components/ui/skeleton";
+import { transportApi, type TransportRoute, type TransportStudent } from "@/lib/api";
 
 const statusCls: Record<string, string> = {
   Active:    "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -50,9 +19,27 @@ const statusCls: Record<string, string> = {
 
 export default function TransportPage() {
   const [tab, setTab] = useState("routes");
+  const [loading, setLoading] = useState(true);
+  const [routes, setRoutes] = useState<TransportRoute[]>([]);
+  const [studentTransport, setStudentTransport] = useState<TransportStudent[]>([]);
 
-  const totalStudents = ROUTES.reduce((a, r) => a + r.students, 0);
-  const totalCapacity = ROUTES.reduce((a, r) => a + r.capacity, 0);
+  useEffect(() => {
+    setLoading(true);
+    transportApi.dashboard()
+      .then((res) => {
+        setRoutes(res.routes);
+        setStudentTransport(res.students);
+      })
+      .catch(() => {
+        setRoutes([]);
+        setStudentTransport([]);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const totalStudents = useMemo(() => routes.reduce((a, r) => a + r.students, 0), [routes]);
+  const totalCapacity = useMemo(() => routes.reduce((a, r) => a + r.capacity, 0), [routes]);
+  const utilization = totalCapacity > 0 ? `${Math.round((totalStudents / totalCapacity) * 100)}%` : "0%";
 
   return (
     <>
@@ -60,10 +47,10 @@ export default function TransportPage() {
         {/* Stat cards */}
         <div className="grid grid-cols-4 gap-4">
           {[
-            { label: "Total Routes",             value: ROUTES.length },
+            { label: "Total Routes",             value: routes.length },
             { label: "Students Using Transport", value: totalStudents },
             { label: "Total Capacity",           value: totalCapacity },
-            { label: "Utilisation",              value: `${Math.round((totalStudents / totalCapacity) * 100)}%` },
+            { label: "Utilisation",              value: utilization },
           ].map((st) => (
             <Card key={st.label} className="shadow-none border-slate-200">
               <CardContent className="p-4">
@@ -81,8 +68,25 @@ export default function TransportPage() {
           </TabsList>
           {/* Routes tab */}
           <TabsContent value="routes" className="mt-4">
-            <div className="grid grid-cols-2 gap-4">
-              {ROUTES.map((r) => {
+            {loading ? (
+              <div className="grid grid-cols-2 gap-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Card key={`route-skel-${i}`} className="shadow-none border-slate-200">
+                    <CardHeader className="pb-2"><Skeleton className="h-10 w-full" /></CardHeader>
+                    <CardContent className="pt-0 space-y-2">
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-2/3" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : routes.length === 0 ? (
+              <Card className="shadow-none border-slate-200">
+                <CardContent className="p-10 text-center text-[13px] text-slate-500">No transport routes found</CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                {routes.map((r) => {
                 const utilPct = Math.round((r.students / r.capacity) * 100);
                 return (
                   <Card key={r.id} className="shadow-none border-slate-200 hover:border-[#007BFF]/40 hover:shadow-sm transition-all">
@@ -123,7 +127,8 @@ export default function TransportPage() {
                   </Card>
                 );
               })}
-            </div>
+              </div>
+            )}
           </TabsContent>
           {/* Students tab */}
           <TabsContent value="students" className="mt-4">
@@ -138,7 +143,16 @@ export default function TransportPage() {
                 </div>
               </CardHeader>
               <CardContent className="p-0 pt-4">
-                <Table>
+                {loading ? (
+                  <div className="px-6 pb-6 space-y-3">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <Skeleton key={`student-skel-${i}`} className="h-10 w-full" />
+                    ))}
+                  </div>
+                ) : studentTransport.length === 0 ? (
+                  <div className="p-6 text-[12px] text-slate-500">No students assigned to transport</div>
+                ) : (
+                  <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-50 hover:bg-slate-50">
                       {["Student", "Class", "Route", "Pickup Stop", "Status"].map((h) => (
@@ -152,10 +166,10 @@ export default function TransportPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {STUDENT_TRANSPORT.map((s) => (
-                      <TableRow key={s.name} className="hover:bg-slate-50 border-slate-100">
+                    {studentTransport.map((s) => (
+                      <TableRow key={s.id} className="hover:bg-slate-50 border-slate-100">
                         <TableCell className="text-[13px] font-medium text-slate-900 pl-6">{s.name}</TableCell>
-                        <TableCell className="text-[13px] text-slate-600">{s.class}</TableCell>
+                        <TableCell className="text-[13px] text-slate-600">{s.class_name}</TableCell>
                         <TableCell className="text-[13px] text-slate-600">{s.route}</TableCell>
                         <TableCell className="text-[13px] text-slate-600">{s.pickup}</TableCell>
                         <TableCell className="pr-6">
@@ -166,7 +180,8 @@ export default function TransportPage() {
                       </TableRow>
                     ))}
                   </TableBody>
-                </Table>
+                  </Table>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
