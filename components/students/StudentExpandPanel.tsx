@@ -15,12 +15,13 @@ import { FileField } from "@/components/form/FileField";
 import { BLOOD_GROUPS, ID_TYPES, RELATIONS, FEE_STATUS, SECTIONS } from "@/components/form/constants";
 
 export function StudentExpandPanel({
-  s, onClose, classesList, onUpdated,
+  s, onClose, classesList, onUpdated, mobile = false,
 }: {
   s: Student;
   onClose: () => void;
   classesList: string[];
   onUpdated: (updated: Student) => void;
+  mobile?: boolean;
 }) {
   const [draft, setDraft] = useState<Student>({ ...s });
   const [saving, setSaving] = useState(false);
@@ -34,7 +35,7 @@ export function StudentExpandPanel({
   const handleSave = async () => {
     setSaving(true); setError("");
     try {
-      const { id, student_code, ...rest } = draft;
+      const { id, ...rest } = draft;
       const updated = await studentsApi.update(id, rest);
       onUpdated(updated);
       onClose();
@@ -45,18 +46,16 @@ export function StudentExpandPanel({
     }
   };
 
-  return (
-    <TableRow className="bg-slate-50/80 border-slate-100">
-      <TableCell colSpan={9} className="px-6 py-5">
-        <div className="flex flex-col gap-5" onClick={(e) => e.stopPropagation()}>
+  const content = (
+    <div className="flex flex-col gap-5" onClick={(e) => e.stopPropagation()}>
 
           {/* Student Information */}
           <div>
             <p className="text-[11px] font-bold text-slate-400 uppercase mb-3 flex items-center gap-2">
               <FontAwesomeIcon icon={faUser} className="text-[#007BFF]" /> Student Information
             </p>
-            <div className="grid grid-cols-4 gap-3">
-              <div className="col-span-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+              <div className="sm:col-span-2 xl:col-span-2">
                 <LField label="Full Name" field="name" value={draft.name} onChange={set} />
               </div>
               <LDatePicker label="Date of Birth"  field="dob"            value={draft.dob}           onChange={set} />
@@ -68,8 +67,8 @@ export function StudentExpandPanel({
               <LField      label="Phone"          field="phone" type="tel"          value={draft.phone}         onChange={set} />
               <LField      label="Email"          field="email" type="email"          value={draft.email}         onChange={set} />
               <LDatePicker label="Admission Date" field="admission_date" value={draft.admission_date} onChange={set} />
-              <div className="col-span-4"><Separator className="my-1" /></div>
-              <p className="col-span-4 text-[11px] font-bold text-slate-400 uppercase">Fee Information</p>
+              <div className="sm:col-span-2 xl:col-span-4"><Separator className="my-1" /></div>
+              <p className="sm:col-span-2 xl:col-span-4 text-[11px] font-bold text-slate-400 uppercase">Fee Information</p>
               <LField label="Tuition Fee (₹/mo)"     field="tuition_fee"        value={String(draft.fees.tuition_fee)}        onChange={(_, v) => setFees("tuition_fee", Number(v))} />
               <LField label="Concession Amount (₹)"  field="concession_amount"  value={String(draft.fees.concession_amount)}  onChange={(_, v) => setFees("concession_amount", Number(v))} />
               <LField label="Concession Reason"      field="concession_reason"  value={draft.fees.concession_reason}         onChange={(_, v) => setFees("concession_reason", v)} />
@@ -82,7 +81,7 @@ export function StudentExpandPanel({
               <LField label="Uniform Fee (₹)"        field="uniform_fee"        value={String(draft.fees.uniform_fee)}        onChange={(_, v) => setFees("uniform_fee", Number(v))} />
               <LField label="Uniform Fee Paid (₹)"   field="uniform_fee_paid"   value={String(draft.fees.uniform_fee_paid)}   onChange={(_, v) => setFees("uniform_fee_paid", Number(v))} />
               <LSelect label="Fee Status"            field="fee_status"         value={draft.fees.fee_status}                options={FEE_STATUS} onChange={(_, v) => setFees("fee_status", v)} />
-              <div className="col-span-4">
+              <div className="sm:col-span-2 xl:col-span-4">
                 <label className="text-[11px] font-semibold text-slate-400 uppercase block mb-1">Address</label>
                 <Input value={draft.address} onChange={(e) => set("address", e.target.value)}
                   className="h-8 text-[12px] bg-white border-slate-200" />
@@ -97,8 +96,8 @@ export function StudentExpandPanel({
             <p className="text-[11px] font-bold text-slate-400 uppercase mb-3 flex items-center gap-2">
               <FontAwesomeIcon icon={faFileLines} className="text-[#007BFF]" /> Documents &amp; Certificates
             </p>
-            <div className="grid grid-cols-4 gap-3">
-              <div className="col-span-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+              <div className="sm:col-span-2 xl:col-span-2">
                 <LField label="Previous School" field="previous_school" value={draft.previous_school} onChange={set} />
               </div>
               <LField  label="TC Number"         field="tc_number"         value={draft.tc_number}         onChange={set} />
@@ -119,11 +118,11 @@ export function StudentExpandPanel({
             <p className="text-[11px] font-bold text-slate-400 uppercase mb-3 flex items-center gap-2">
               <FontAwesomeIcon icon={faUsers} className="text-[#007BFF]" /> Guardian / Parent Information
             </p>
-            <div className="grid grid-cols-2 gap-x-8 gap-y-3">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-8 gap-y-5">
               {/* Primary */}
               <div className="flex flex-col gap-3">
                 <p className="text-[11px] font-bold text-slate-500">Primary Guardian</p>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <LField  label="Name"       field="name"       value={draft.guardian.name}       onChange={(_, v) => setG("name", v)} />
                   <LSelect label="Relation"   field="relation"   value={draft.guardian.relation}   options={RELATIONS} onChange={(_, v) => setG("relation", v)} />
                   <LField  label="Phone"      field="phone" type="tel"      value={draft.guardian.phone}      onChange={(_, v) => setG("phone", v)} />
@@ -132,13 +131,13 @@ export function StudentExpandPanel({
                   <div />
                   <LSelect label="ID Type"    field="id_type"    value={draft.guardian.id_type}    options={ID_TYPES} onChange={(_, v) => setG("id_type", v)} />
                   <LField  label="ID Number"  field="id_number"  value={draft.guardian.id_number}  onChange={(_, v) => setG("id_number", v)} />
-                  <div className="col-span-2">
+                  <div className="sm:col-span-2">
                     <label className="text-[11px] font-semibold text-slate-400 uppercase block mb-1">Address (if different)</label>
                     <Input value={draft.guardian.address} onChange={(e) => setG("address", e.target.value)}
                       className="h-8 text-[12px] bg-white border-slate-200" />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <FileField label="Replace Guardian Photo"    accept="image/*" />
                   <FileField label="Replace Guardian ID Proof" accept=".pdf,image/*" />
                 </div>
@@ -146,7 +145,7 @@ export function StudentExpandPanel({
               {/* Secondary */}
               <div className="flex flex-col gap-3">
                 <p className="text-[11px] font-bold text-slate-500">Secondary Guardian <span className="text-slate-400 font-normal">(optional)</span></p>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <LField  label="Name"      field="name"      value={draft.guardian2.name}      onChange={(_, v) => setG2("name", v)} />
                   <LSelect label="Relation"  field="relation"  value={draft.guardian2.relation}  options={RELATIONS} onChange={(_, v) => setG2("relation", v)} />
                   <LField  label="Phone"     field="phone" type="tel"     value={draft.guardian2.phone}     onChange={(_, v) => setG2("phone", v)} />
@@ -154,7 +153,7 @@ export function StudentExpandPanel({
                   <LSelect label="ID Type"   field="id_type"   value={draft.guardian2.id_type}   options={ID_TYPES} onChange={(_, v) => setG2("id_type", v)} />
                   <LField  label="ID Number" field="id_number" value={draft.guardian2.id_number} onChange={(_, v) => setG2("id_number", v)} />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <FileField label="Replace Guardian 2 Photo"    accept="image/*" />
                   <FileField label="Replace Guardian 2 ID Proof" accept=".pdf,image/*" />
                 </div>
@@ -164,14 +163,24 @@ export function StudentExpandPanel({
 
           {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-1.5">{error}</p>}
 
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" size="sm" className="h-7 text-[12px]" onClick={onClose} disabled={saving}>Cancel</Button>
-            <Button size="sm" className="h-7 text-[12px] bg-[#007BFF] hover:bg-[#0069d9] text-white" onClick={handleSave} disabled={saving}>
+          <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
+            <Button variant="outline" size="sm" className="h-8 sm:h-7 text-[12px] w-full sm:w-auto" onClick={onClose} disabled={saving}>Cancel</Button>
+            <Button size="sm" className="h-8 sm:h-7 text-[12px] bg-[#007BFF] hover:bg-[#0069d9] text-white w-full sm:w-auto" onClick={handleSave} disabled={saving}>
               {saving ? <><FontAwesomeIcon icon={faSpinner} className="mr-1 animate-spin" />Saving…</> : "Save Changes"}
             </Button>
           </div>
 
-        </div>
+    </div>
+  );
+
+  if (mobile) {
+    return <div className="border-t border-slate-100 p-3 bg-slate-50/70">{content}</div>;
+  }
+
+  return (
+    <TableRow className="bg-slate-50/80 border-slate-100">
+      <TableCell colSpan={9} className="px-6 py-5">
+        {content}
       </TableCell>
     </TableRow>
   );
