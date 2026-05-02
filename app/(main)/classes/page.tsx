@@ -38,12 +38,12 @@ const ALL_SECTIONS = ["A","B","C","D","E"];
 function StatCard({ icon, label, value }: { icon: typeof faUsers; label: string; value: number | string }) {
   return (
     <Card className="shadow-none border-slate-200">
-      <CardContent className="p-5 flex items-center gap-4">
+      <CardContent className="p-4 md:p-5 flex items-center gap-3 md:gap-4">
         <div className="w-9 h-9 rounded-lg bg-[#007BFF]/10 flex items-center justify-center shrink-0">
           <FontAwesomeIcon icon={icon} className="text-[14px] text-[#007BFF]" />
         </div>
         <div>
-          <p className="text-xl font-bold text-slate-900 leading-none">{value}</p>
+          <p className="text-lg md:text-xl font-bold text-slate-900 leading-none">{value}</p>
           <p className="text-[12px] text-slate-500 mt-0.5">{label}</p>
         </div>
       </CardContent>
@@ -62,9 +62,9 @@ function ClassCard({
 }) {
   return (
     <Card className="shadow-none border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all duration-150">
-      <CardContent className="p-0">
-        <div className="flex items-stretch">
-          <div className="flex flex-col justify-center px-5 py-4 min-w-[160px] border-r border-slate-100">
+      <CardContent className="p-4 md:p-0">
+        <div className="flex flex-col md:flex-row md:items-stretch">
+          <div className="flex flex-col justify-center md:px-5 md:py-4 md:min-w-[160px] md:border-r md:border-slate-100">
             <p className="text-[15px] font-bold text-slate-900">{cls.name}</p>
             <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1">
               <FontAwesomeIcon icon={faChalkboardTeacher} className="text-[10px]" />
@@ -72,16 +72,16 @@ function ClassCard({
             </p>
           </div>
 
-          <div className="flex-1 px-5 py-4 flex flex-col justify-center gap-2.5">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-semibold text-slate-400 uppercase w-14 shrink-0">Sections</span>
-              <div className="flex gap-1">
+          <div className="md:flex-1 md:px-5 md:py-4 flex flex-col justify-center gap-2.5 mt-3 md:mt-0">
+            <div className="flex items-start gap-2">
+              <span className="text-[10px] font-semibold text-slate-400 uppercase w-14 shrink-0 mt-0.5">Sections</span>
+              <div className="flex gap-1 flex-wrap items-center">
                 {cls.sections.map((s) => (
                   <span key={s} className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold bg-[#007BFF]/10 text-[#007BFF]">
                     {s}
                   </span>
                 ))}
-                <span className="text-[11px] text-slate-400 ml-1 self-center">
+                <span className="text-[11px] text-slate-400 ml-1">
                   {cls.sections.length} section{cls.sections.length !== 1 ? "s" : ""}
                 </span>
               </div>
@@ -100,8 +100,8 @@ function ClassCard({
             </div>
           </div>
 
-          <div className="flex flex-col justify-center items-end px-5 py-4 border-l border-slate-100 gap-3 shrink-0">
-            <div className="text-right">
+          <div className="flex md:flex-col items-center md:items-end justify-between md:justify-center md:px-5 md:py-4 md:border-l md:border-slate-100 gap-3 shrink-0 mt-3 pt-3 border-t border-slate-100 md:mt-0 md:pt-0 md:border-t-0">
+            <div className="text-left md:text-right">
               <p className="text-[18px] font-bold text-slate-900 leading-none">{cls.student_count}</p>
               <p className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-wide">students</p>
             </div>
@@ -141,11 +141,14 @@ function ClassDialog({
 
   useEffect(() => {
     if (open) {
-      setForm(initial
-        ? { name: initial.name, teacher: initial.teacher, sections: [...initial.sections], subjects: [...initial.subjects] }
-        : { ...BLANK },
-      );
-      setError("");
+      const handle = setTimeout(() => {
+        setForm(initial
+          ? { name: initial.name, teacher: initial.teacher, sections: [...initial.sections], subjects: [...initial.subjects] }
+          : { ...BLANK },
+        );
+        setError("");
+      }, 0);
+      return () => clearTimeout(handle);
     }
   }, [open, initial]);
 
@@ -170,7 +173,7 @@ function ClassDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="!max-w-lg max-h-[90vh] flex flex-col overflow-hidden p-0">
+      <DialogContent className="!max-w-lg max-h-[90vh] w-[calc(100vw-1.5rem)] sm:w-full flex flex-col overflow-hidden p-0">
         <div className="px-6 pt-6 shrink-0">
           <DialogHeader>
             <DialogTitle className="text-[15px] font-semibold">{isEdit ? "Edit Class" : "Add New Class"}</DialogTitle>
@@ -195,7 +198,7 @@ function ClassDialog({
 
           <div>
             <label className="text-[11px] font-semibold text-slate-400 uppercase block mb-2">Sections</label>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               {ALL_SECTIONS.map((s) => {
                 const active = form.sections.includes(s);
                 return (
@@ -272,7 +275,12 @@ export default function ClassesPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      load();
+    }, 0);
+    return () => clearTimeout(handle);
+  }, []);
 
   const openAdd  = () => { setEditTarget(null); setShowDialog(true); };
   const openEdit = (cls: Class) => { setEditTarget(cls); setShowDialog(true); };
@@ -293,22 +301,22 @@ export default function ClassesPage() {
 
   return (
     <>
-      <div className="flex flex-col gap-6">
-        <div className="grid grid-cols-4 gap-4">
+      <div className="flex flex-col gap-4 md:gap-6">
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
           <StatCard icon={faGraduationCap}     label="Total Classes"    value={stats.total_classes} />
           <StatCard icon={faUsers}             label="Total Sections"   value={stats.total_sections} />
           <StatCard icon={faChalkboardTeacher} label="Total Students"   value={stats.total_students} />
           <StatCard icon={faBookOpen}          label="Subjects Offered" value={stats.total_subjects} />
         </div>
 
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <h2 className="text-[14px] font-semibold text-slate-800">All Classes</h2>
-          <Button size="sm" className="bg-[#007BFF] hover:bg-[#0069d9] text-white text-[13px] h-8 gap-1.5" onClick={openAdd}>
+          <Button size="sm" className="bg-[#007BFF] hover:bg-[#0069d9] text-white text-[13px] h-9 sm:h-8 gap-1.5 w-full sm:w-auto" onClick={openAdd}>
             <FontAwesomeIcon icon={faPlus} className="text-[11px]" /> Add Class
           </Button>
         </div>
 
-        <div className="flex items-center px-5 gap-4 text-[10px] font-semibold text-slate-400 uppercase tracking-wide -mb-3">
+        <div className="hidden md:flex items-center px-5 gap-4 text-[10px] font-semibold text-slate-400 uppercase tracking-wide -mb-3">
           <span className="min-w-[160px]">Class / Teacher</span>
           <span className="flex-1">Sections & Subjects</span>
           <span className="w-24 text-right pr-1">Students</span>

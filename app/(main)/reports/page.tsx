@@ -103,9 +103,9 @@ export default function ReportsPage() {
   });
   return (
     <>
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-4 md:gap-6">
         {/* Stat cards */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
           {[
             { label: "Total Students",   value: "411"   },
             { label: "Avg Performance",  value: "76.4%" },
@@ -114,7 +114,7 @@ export default function ReportsPage() {
           ].map((st) => (
             <Card key={st.label} className="shadow-none border-slate-200">
               <CardContent className="p-4">
-                <p className="text-2xl font-bold text-slate-900">{st.value}</p>
+                <p className="text-xl md:text-2xl font-bold text-slate-900">{st.value}</p>
                 <p className="text-[12px] text-slate-500 mt-0.5">{st.label}</p>
               </CardContent>
             </Card>
@@ -122,12 +122,12 @@ export default function ReportsPage() {
         </div>
         {/* Tabs */}
         <Tabs defaultValue="overview">
-          <div className="flex items-center justify-between">
-            <TabsList className="bg-slate-100 h-8 p-0.5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <TabsList className="bg-slate-100 h-8 p-0.5 w-full sm:w-auto overflow-x-auto justify-start">
               {["overview", "financial", "academic"].map((t) => (
                 <TabsTrigger
                   key={t} value={t}
-                  className="text-[12px] h-7 capitalize data-[state=active]:bg-white data-[state=active]:text-[#212529] data-[state=active]:shadow-none"
+                  className="text-[12px] h-7 capitalize whitespace-nowrap data-[state=active]:bg-white data-[state=active]:text-[#212529] data-[state=active]:shadow-none"
                 >
                   {t}
                 </TabsTrigger>
@@ -137,7 +137,7 @@ export default function ReportsPage() {
             <Popover>
               <PopoverTrigger asChild>
                 <button className={cn(
-                  "flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-[12px] text-slate-700 hover:bg-slate-50 transition-colors",
+                  "flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-[12px] text-slate-700 hover:bg-slate-50 transition-colors w-full sm:w-auto",
                   !range?.from && "text-slate-400"
                 )}>
                   <CalendarIcon className="h-3.5 w-3.5 text-slate-400" />
@@ -165,7 +165,7 @@ export default function ReportsPage() {
           </div>
           {/* ── Overview ── */}
           <TabsContent value="overview" className="mt-4 flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               {/* Gender donut */}
               <Card className="shadow-none border-slate-200 flex flex-col">
                 <CardHeader className="pb-0 items-center">
@@ -173,7 +173,7 @@ export default function ReportsPage() {
                   <CardDescription className="text-[12px]">Total enrolment by gender</CardDescription>
                 </CardHeader>
                 <CardContent className="flex-1 pb-0">
-                  <ChartContainer config={genderConfig} className="mx-auto aspect-square max-h-[180px]">
+                  <ChartContainer config={genderConfig} className="mx-auto aspect-square max-h-[180px] sm:max-h-[210px]">
                     <PieChart>
                       <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
                       <Pie data={GENDER_DATA} dataKey="value" nameKey="name" innerRadius={46} outerRadius={72} strokeWidth={3}>
@@ -196,7 +196,7 @@ export default function ReportsPage() {
                     </PieChart>
                   </ChartContainer>
                 </CardContent>
-                <div className="flex justify-center gap-5 px-5 pb-4 pt-2">
+                <div className="flex flex-wrap justify-center gap-3 sm:gap-5 px-5 pb-4 pt-2">
                   {GENDER_DATA.map((g) => (
                     <div key={g.name} className="flex items-center gap-1.5">
                       <div className="w-2 h-2 rounded-sm shrink-0" style={{ background: g.fill }} />
@@ -212,7 +212,7 @@ export default function ReportsPage() {
                   <CardDescription className="text-[12px]">Average score per class</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ChartContainer config={perfConfig} className="h-[200px] w-full">
+                  <ChartContainer config={perfConfig} className="h-[180px] sm:h-[200px] w-full">
                     <BarChart data={PERFORMANCE_DATA} barSize={18} margin={{ left: 0, right: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="class" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} tickMargin={8} />
@@ -227,7 +227,7 @@ export default function ReportsPage() {
             <Card className="shadow-none border-slate-200">
               <CardHeader className="pb-2"><CardTitle className="text-[13px]">Downloadable Reports</CardTitle></CardHeader>
               <Separator />
-              <CardContent className="pt-4 grid grid-cols-3 gap-3">
+              <CardContent className="pt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                 {REPORT_CARDS.map((r) => (
                   <div key={r.title} className="flex items-start gap-3 p-3 rounded-lg border border-slate-100 bg-slate-50">
                     <div className={`w-8 h-8 rounded-lg ${r.bg} flex items-center justify-center shrink-0`}>
@@ -253,7 +253,7 @@ export default function ReportsPage() {
                 <CardDescription className="text-[12px]">Fee collection performance over 6 months</CardDescription>
               </CardHeader>
               <CardContent>
-                <ChartContainer config={revenueConfig} className="h-[280px] w-full">
+                <ChartContainer config={revenueConfig} className="h-[220px] sm:h-[280px] w-full">
                   <BarChart data={REVENUE_DATA} barGap={4} barSize={22} margin={{ left: 0, right: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} tickMargin={8} />
@@ -272,7 +272,8 @@ export default function ReportsPage() {
               <CardHeader className="pb-2"><CardTitle className="text-[13px]">Monthly Summary</CardTitle></CardHeader>
               <Separator />
               <CardContent className="pt-0">
-                <table className="w-full">
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[680px]">
                   <thead>
                     <tr className="border-b border-slate-100">
                       {["Month", "Collected", "Expected", "Shortfall", "Collection %"].map((h) => (
@@ -299,12 +300,13 @@ export default function ReportsPage() {
                     })}
                   </tbody>
                 </table>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
           {/* ── Academic ── */}
           <TabsContent value="academic" className="mt-4 flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               {/* Horizontal bar – class avg */}
               <Card className="shadow-none border-slate-200">
                 <CardHeader className="pb-2">
@@ -312,7 +314,7 @@ export default function ReportsPage() {
                   <CardDescription className="text-[12px]">Average exam score per class</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ChartContainer config={perfConfig} className="h-[240px] w-full">
+                  <ChartContainer config={perfConfig} className="h-[220px] sm:h-[240px] w-full">
                     <BarChart data={PERFORMANCE_DATA} layout="vertical" barSize={14} margin={{ left: 0, right: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
                       <XAxis type="number" domain={[60, 100]} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
@@ -344,7 +346,7 @@ export default function ReportsPage() {
                   ))}
                   {/* Mini subject bar chart */}
                   <div className="mt-3">
-                    <ChartContainer config={subjectConfig} className="h-[140px] w-full">
+                    <ChartContainer config={subjectConfig} className="h-[120px] sm:h-[140px] w-full">
                       <BarChart data={SUBJECT_PERF} barSize={16} margin={{ left: 0, right: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey="subject" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickMargin={6} />

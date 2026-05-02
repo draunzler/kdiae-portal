@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faFolder, faFolderOpen, faFolderPlus, faCloudArrowUp,
@@ -43,10 +43,6 @@ const FOLDER_COLORS = [
   "#FFCA2B", "#3B82F6", "#10B981", "#F43F5E", "#8B5CF6",
   "#F97316", "#06B6D4", "#84CC16",
 ];
-
-function generateId() {
-  return Math.random().toString(36).slice(2, 10);
-}
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -144,13 +140,33 @@ function FolderTree({
   mediaFiles,
   currentFolderId,
   onSelect,
+  mobile = false,
 }: {
   folders: Folder[];
   mediaFiles: MediaFile[];
   currentFolderId: string;
   onSelect: (id: string) => void;
+  mobile?: boolean;
 }) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(["root", "f1", "f2"]));
+  const [expanded, setExpanded] = useState<Set<string>>(new Set(["root"]));
+
+  const activePath = useMemo(() => {
+    const path = new Set<string>(["root"]);
+    if (!currentFolderId || currentFolderId === "root") return path;
+
+    let cursor = folders.find((f) => f.id === currentFolderId);
+    while (cursor?.parentId) {
+      path.add(cursor.id);
+      const parentId = cursor.parentId;
+      if (parentId === "root") {
+        path.add("root");
+        break;
+      }
+      cursor = folders.find((f) => f.id === parentId);
+    }
+
+    return path;
+  }, [currentFolderId, folders]);
 
   function countItems(folderId: string): number {
     const direct = mediaFiles.filter(m => m.folderId === folderId).length;
@@ -161,7 +177,11 @@ function FolderTree({
   function toggle(id: string) {
     setExpanded(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   }
@@ -169,39 +189,55 @@ function FolderTree({
   function renderNode(folder: Folder, depth = 0): React.ReactNode {
     const children = folders.filter(f => f.parentId === folder.id);
     const hasChildren = children.length > 0;
-    const isExpanded = expanded.has(folder.id);
+    const isExpanded = expanded.has(folder.id) || activePath.has(folder.id);
     const isActive = currentFolderId === folder.id;
     const count = countItems(folder.id);
 
     return (
       <div key={folder.id}>
-        <button
-          onClick={() => { onSelect(folder.id); if (hasChildren) toggle(folder.id); }}
+        <div
           style={{ paddingLeft: depth * 16 + 8 }}
-          className={`w-full flex items-center gap-1.5 py-1.5 pr-2 rounded-md text-[12.5px] transition-colors ${
+          className={`w-full flex items-center gap-1.5 pr-2 rounded-md transition-colors ${
             isActive ? "bg-blue-50 text-blue-700 font-semibold" : "text-slate-600 hover:bg-slate-100"
           }`}
         >
           {hasChildren ? (
-            <FontAwesomeIcon
-              icon={isExpanded ? faChevronDown : faChevronRight}
-              className="w-2.5 text-slate-400 shrink-0"
-            />
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggle(folder.id);
+              }}
+              className="w-6 h-8 flex items-center justify-center text-slate-400"
+              aria-label={isExpanded ? "Collapse folder" : "Expand folder"}
+            >
+              <FontAwesomeIcon icon={isExpanded ? faChevronDown : faChevronRight} className="w-2.5 shrink-0" />
+            </button>
           ) : (
-            <span className="w-2.5 shrink-0" />
+            <span className="w-6 h-8 shrink-0" />
           )}
-          <FontAwesomeIcon
-            icon={isExpanded && hasChildren ? faFolderOpen : faFolder}
-            className="w-3.5 shrink-0"
-            style={{ color: folder.color }}
-          />
-          <span className="flex-1 text-left truncate">{folder.name}</span>
-          {count > 0 && (
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-              isActive ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-400"
-            }`}>{count}</span>
-          )}
-        </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              onSelect(folder.id);
+              if (!mobile && hasChildren) toggle(folder.id);
+            }}
+            className="flex-1 min-w-0 flex items-center gap-1.5 py-1.5 text-left"
+          >
+            <FontAwesomeIcon
+              icon={isExpanded && hasChildren ? faFolderOpen : faFolder}
+              className="w-3.5 shrink-0"
+              style={{ color: folder.color }}
+            />
+            <span className="flex-1 text-left truncate text-[12.5px]">{folder.name}</span>
+            {count > 0 && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                isActive ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-400"
+              }`}>{count}</span>
+            )}
+          </button>
+        </div>
         {isExpanded && hasChildren && (
           <div>
             {children.map(child => renderNode(child, depth + 1))}
@@ -380,9 +416,14 @@ export default function GalleryPage() {
   const [dragOver, setDragOver] = useState(false);
   const [renameName, setRenameName] = useState("");
   const [loading, setLoading] = useState(true);
+  const [showFoldersMobile, setShowFoldersMobile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const drawerTouchStartX = useRef<number | null>(null);
+  const drawerTouchStartY = useRef<number | null>(null);
 
   const currentPrefix = currentFolderId === "root" ? "" : currentFolderId;
+  const currentFolder = folders.find((f) => f.id === currentFolderId);
+  const parentFolderId = currentFolder?.parentId;
 
   const refreshGallery = useCallback(async () => {
     setLoading(true);
@@ -400,10 +441,12 @@ export default function GalleryPage() {
   }, []);
 
   useEffect(() => {
-    refreshGallery();
+    const handle = setTimeout(() => {
+      refreshGallery();
+    }, 0);
+    return () => clearTimeout(handle);
   }, [refreshGallery]);
 
-  const currentFolder = folders.find(f => f.id === currentFolderId)!;
   const breadcrumb = getBreadcrumb(folders, currentFolderId);
   const subFolders = folders.filter(f => f.parentId === currentFolderId);
   const filesInFolder = mediaFiles.filter(f =>
@@ -508,15 +551,19 @@ export default function GalleryPage() {
     if (e.dataTransfer.files.length) uploadFiles(Array.from(e.dataTransfer.files));
   }
 
+  function openFileAt(files: MediaFile[], index: number) {
+    setLightbox({ files, index });
+  }
+
   // Total stats
   const totalFiles = mediaFiles.filter(m => m.folderId === currentFolderId).length;
   const totalSize = mediaFiles.filter(m => m.folderId === currentFolderId).reduce((a, m) => a + m.size, 0);
 
   return (
     <>
-        <div className="flex flex-1 overflow-hidden h-full">
+        <div className="flex flex-1 flex-col md:flex-row overflow-hidden h-full">
           {/* ── Left Sidebar: Folder Tree ─────────────────────────────── */}
-          <aside className="w-60 shrink-0 bg-white border-r border-slate-200 flex flex-col overflow-hidden">
+          <aside className="hidden md:flex w-60 shrink-0 bg-white border-r border-slate-200 flex-col overflow-hidden">
             <div className="px-3 py-3 border-b border-slate-100 flex items-center justify-between">
               <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Folders</span>
               <button
@@ -537,6 +584,59 @@ export default function GalleryPage() {
             </div>
           </aside>
 
+          {showFoldersMobile && (
+            <div className="md:hidden fixed inset-0 z-40 bg-black/40" onClick={() => setShowFoldersMobile(false)}>
+              <aside
+                className="absolute left-0 top-0 h-full w-[82%] max-w-[300px] bg-white border-r border-slate-200 flex flex-col overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+                onTouchStart={(e) => {
+                  const t = e.touches[0];
+                  drawerTouchStartX.current = t.clientX;
+                  drawerTouchStartY.current = t.clientY;
+                }}
+                onTouchEnd={(e) => {
+                  if (drawerTouchStartX.current == null || drawerTouchStartY.current == null) return;
+                  const t = e.changedTouches[0];
+                  const dx = t.clientX - drawerTouchStartX.current;
+                  const dy = t.clientY - drawerTouchStartY.current;
+                  drawerTouchStartX.current = null;
+                  drawerTouchStartY.current = null;
+                  if (dx < -60 && Math.abs(dy) < 60) {
+                    setShowFoldersMobile(false);
+                  }
+                }}
+              >
+                <div className="px-3 py-3 border-b border-slate-100 flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Folders</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setNewFolderDialog(true)}
+                      title="New folder"
+                      className="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition-colors"
+                    >
+                      <FontAwesomeIcon icon={faFolderPlus} className="w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setShowFoldersMobile(false)}
+                      className="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 text-slate-500"
+                    >
+                      <FontAwesomeIcon icon={faXmark} className="w-3.5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto px-2 py-2">
+                  <FolderTree
+                    folders={folders}
+                    mediaFiles={mediaFiles}
+                    currentFolderId={currentFolderId}
+                    mobile
+                    onSelect={(id) => { setCurrentFolderId(id); }}
+                  />
+                </div>
+              </aside>
+            </div>
+          )}
+
           {/* ── Main Area ────────────────────────────────────────────── */}
           <main
             className={`flex-1 flex flex-col min-w-0 overflow-hidden transition-colors ${dragOver ? "bg-blue-50" : ""}`}
@@ -545,9 +645,27 @@ export default function GalleryPage() {
             onDrop={handleDrop}
           >
             {/* Toolbar */}
-            <div className="bg-white border-b border-slate-200 px-5 py-2.5 flex items-center gap-3 shrink-0">
+            <div className="bg-white border-b border-slate-200 px-3 sm:px-5 py-2.5 flex flex-wrap md:flex-nowrap items-center gap-2.5 md:gap-3 shrink-0">
+              {currentFolderId !== "root" && (
+                <button
+                  onClick={() => setCurrentFolderId(parentFolderId ?? "root")}
+                  className="md:hidden w-8 h-8 border border-slate-200 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+                  title="Back"
+                >
+                  <FontAwesomeIcon icon={faChevronLeft} className="w-3.5" />
+                </button>
+              )}
+
+              <button
+                onClick={() => setShowFoldersMobile(true)}
+                className="md:hidden w-8 h-8 border border-slate-200 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+                title="Folders"
+              >
+                <FontAwesomeIcon icon={faFolderOpen} className="w-3.5" />
+              </button>
+
               {/* Breadcrumb */}
-              <nav className="flex items-center gap-1 text-[12.5px] flex-1 min-w-0 overflow-hidden">
+              <nav className="order-1 md:order-none flex items-center gap-1 text-[12px] sm:text-[12.5px] flex-1 min-w-0 overflow-hidden">
                 {breadcrumb.map((crumb, i) => (
                   <span key={crumb.id} className="flex items-center gap-1 min-w-0">
                     {i > 0 && <FontAwesomeIcon icon={faChevronRight} className="w-2 text-slate-300 shrink-0" />}
@@ -566,23 +684,23 @@ export default function GalleryPage() {
               </nav>
 
               {/* Info */}
-              <span className="text-[11px] text-slate-400 shrink-0">
+              <span className="hidden sm:inline text-[11px] text-slate-400 shrink-0">
                 {totalFiles} file{totalFiles !== 1 ? "s" : ""} · {formatBytes(totalSize)}
               </span>
 
               {/* Search */}
-              <div className="relative shrink-0">
+              <div className="order-3 md:order-none relative shrink-0 w-full sm:w-auto sm:min-w-[176px]">
                 <FontAwesomeIcon icon={faMagnifyingGlass} className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 text-slate-400" />
                 <Input
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   placeholder="Search..."
-                  className="pl-7 h-8 w-44 text-[12.5px]"
+                  className="pl-7 h-8 w-full sm:w-44 text-[12.5px]"
                 />
               </div>
 
               {/* View toggle */}
-              <div className="flex items-center border border-slate-200 rounded-md overflow-hidden shrink-0">
+              <div className="order-2 md:order-none flex items-center border border-slate-200 rounded-md overflow-hidden shrink-0">
                 <button
                   onClick={() => setViewMode("grid")}
                   className={`w-8 h-8 flex items-center justify-center text-[12px] transition-colors ${viewMode === "grid" ? "bg-slate-100 text-slate-700" : "text-slate-400 hover:text-slate-600"}`}
@@ -602,7 +720,7 @@ export default function GalleryPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setNewFolderDialog(true)}
-                className="h-8 text-[12.5px] gap-1.5 shrink-0"
+                className="h-8 text-[12.5px] gap-1.5 shrink-0 hidden sm:inline-flex"
               >
                 <FontAwesomeIcon icon={faFolderPlus} className="w-3" />
                 New Folder
@@ -612,7 +730,7 @@ export default function GalleryPage() {
               <Button
                 size="sm"
                 onClick={() => fileInputRef.current?.click()}
-                className="h-8 text-[12.5px] gap-1.5 shrink-0 bg-[#007BFF] hover:bg-blue-600"
+                className="h-8 text-[12px] sm:text-[12.5px] gap-1.5 shrink-0 bg-[#007BFF] hover:bg-blue-600 ml-auto md:ml-0"
               >
                 <FontAwesomeIcon icon={faCloudArrowUp} className="w-3.5" />
                 Upload
@@ -659,7 +777,7 @@ export default function GalleryPage() {
             )}
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto px-5 py-4">
+            <div className="flex-1 overflow-y-auto px-3 sm:px-5 py-4">
               {loading ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                   {Array.from({ length: 12 }).map((_, i) => (
@@ -681,7 +799,7 @@ export default function GalleryPage() {
                         return (
                           <div
                             key={folder.id}
-                            onDoubleClick={() => setCurrentFolderId(folder.id)}
+                            onClick={() => setCurrentFolderId(folder.id)}
                             onContextMenu={e => openCtxMenu(e, "folder", folder.id)}
                             className="group relative flex flex-col items-center gap-1.5 p-3 rounded-xl border border-slate-100 bg-white hover:bg-slate-50 hover:border-slate-200 hover:shadow-sm cursor-pointer transition-all select-none"
                           >
@@ -709,13 +827,14 @@ export default function GalleryPage() {
                       })}
                     </div>
                   ) : (
-                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                    <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+                      <div className="min-w-[620px]">
                       {filteredFolders.map((folder, i) => {
                         const count = mediaFiles.filter(m => m.folderId === folder.id).length;
                         return (
                           <div
                             key={folder.id}
-                            onDoubleClick={() => setCurrentFolderId(folder.id)}
+                            onClick={() => setCurrentFolderId(folder.id)}
                             onContextMenu={e => openCtxMenu(e, "folder", folder.id)}
                             className={`group flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 cursor-pointer transition-colors ${i > 0 ? "border-t border-slate-100" : ""}`}
                           >
@@ -732,6 +851,7 @@ export default function GalleryPage() {
                           </div>
                         );
                       })}
+                      </div>
                     </div>
                   )}
                 </section>
@@ -750,7 +870,7 @@ export default function GalleryPage() {
                           key={file.id}
                           onContextMenu={e => openCtxMenu(e, "file", file.id)}
                           className="group relative flex flex-col rounded-xl border border-slate-100 bg-white hover:border-slate-200 hover:shadow-md cursor-pointer transition-all overflow-hidden"
-                          onClick={() => setLightbox({ files: filesInFolder, index: idx })}
+                          onClick={() => openFileAt(filesInFolder, idx)}
                         >
                           <div className="aspect-[4/3] bg-slate-100 overflow-hidden relative">
                             {file.type === "image" ? (
@@ -782,12 +902,13 @@ export default function GalleryPage() {
                       ))}
                     </div>
                   ) : (
-                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                    <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+                      <div className="min-w-[700px]">
                       {filesInFolder.map((file, idx) => (
                         <div
                           key={file.id}
                           onContextMenu={e => openCtxMenu(e, "file", file.id)}
-                          onClick={() => setLightbox({ files: filesInFolder, index: idx })}
+                          onClick={() => openFileAt(filesInFolder, idx)}
                           className={`group flex items-center gap-3 px-4 py-2 hover:bg-slate-50 cursor-pointer transition-colors ${idx > 0 ? "border-t border-slate-100" : ""}`}
                         >
                           <div className="w-8 h-8 rounded-md overflow-hidden bg-slate-100 shrink-0">
@@ -812,6 +933,7 @@ export default function GalleryPage() {
                           </button>
                         </div>
                       ))}
+                      </div>
                     </div>
                   )}
                 </section>
@@ -823,7 +945,7 @@ export default function GalleryPage() {
                   {search ? (
                     <>
                       <FontAwesomeIcon icon={faMagnifyingGlass} className="w-10 h-10 mb-3 text-slate-200" />
-                      <p className="text-[14px] font-medium">No results for "{search}"</p>
+                      <p className="text-[14px] font-medium">No results for &quot;{search}&quot;</p>
                     </>
                   ) : (
                     <>
