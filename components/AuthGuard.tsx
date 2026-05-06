@@ -1,16 +1,41 @@
 "use client";
 
 import { useEffect, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { getAccessToken, secondsUntilExpiry } from "@/lib/auth";
 import { useAuth } from "@/lib/auth-context";
+
 // Refresh proactively when <5 min (300s) remain on the access token
 const REFRESH_THRESHOLD_SEC = 300;
 // How often to check (every 2 minutes)
 const CHECK_INTERVAL_MS = 2 * 60 * 1000;
 
+// ── RBAC: which roles may access each route prefix ───────────────────────────
+// undefined entry = any authenticated user
+const ROUTE_ROLES: Array<{ prefix: string; roles: string[] }> = [
+  { prefix: "/settings",     roles: ["admin"] },
+  { prefix: "/admissions",   roles: ["admin", "teacher"] },
+  { prefix: "/classes",      roles: ["admin", "teacher"] },
+  { prefix: "/timetable",    roles: ["admin", "teacher"] },
+  { prefix: "/exams",        roles: ["admin", "teacher"] },
+  { prefix: "/attendance",   roles: ["admin", "teacher"] },
+  { prefix: "/announcements",roles: ["admin", "teacher"] },
+  { prefix: "/gallery",      roles: ["admin", "teacher"] },
+  { prefix: "/fees",         roles: ["admin", "finance"] },
+  { prefix: "/reports",      roles: ["admin", "finance"] },
+  { prefix: "/transport",    roles: ["admin", "finance"] },
+];
+
+function isAllowed(pathname: string, role: string | undefined): boolean {
+  if (!role) return false;
+  const match = ROUTE_ROLES.find((r) => pathname === r.prefix || pathname.startsWith(r.prefix + "/"));
+  if (!match) return true; // no restriction
+  return match.roles.includes(role);
+}
+
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const auth = useAuth();
   const activityRef = useRef(false);
 
@@ -24,8 +49,14 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
     if (!auth.accessToken) {
       router.replace("/login");
+      return;
     }
-  }, [auth.initialized, auth.accessToken, router]);
+
+    // RBAC: redirect to /forbidden if the user's role doesn't allow this route
+    if (auth.user && !isAllowed(pathname, auth.user.role)) {
+      router.replace("/forbidden");
+    }
+  }, [auth.initialized, auth.accessToken, auth.user, pathname, router]);
 
   // Periodic check: refresh proactively if user has been active
   useEffect(() => {

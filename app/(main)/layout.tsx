@@ -18,7 +18,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         </div>
         <div className="flex flex-col flex-1 min-w-0">
           <Navbar />
-          <main className={`flex-1 overflow-y-auto min-h-0 pb-20 md:pb-0 ${isGallery ? "" : "p-6"}`}>
+          <main className={`flex-1 overflow-y-auto min-h-0 pb-20 md:pb-6 ${isGallery ? "md:pb-0" : "p-6"}`}>
             {children}
           </main>
         </div>

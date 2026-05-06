@@ -88,11 +88,14 @@ export interface StudentStats {
 
 export interface Class {
   id: string;
+  class_code?: string;
   name: string;
   teacher: string;
   sections: string[];
   subjects: string[];
   student_count: number;
+  status: string;       // active | pending | rejected
+  submitted_by: string;
 }
 
 export interface ClassStats {
@@ -281,22 +284,22 @@ export const admissionsApi = {
 // ── Classes ───────────────────────────────────────────────────────────────────
 
 export const classesApi = {
-  list(): Promise<Class[]> {
-    return apiFetch<Class[]>("/api/classes");
+  list(signal?: AbortSignal): Promise<Class[]> {
+    return apiFetch<Class[]>("/api/classes", { signal });
   },
 
   stats(): Promise<ClassStats> {
     return apiFetch<ClassStats>("/api/classes/stats");
   },
 
-  create(body: Omit<Class, "id" | "student_count">): Promise<Class> {
+  create(body: Omit<Class, "id" | "student_count" | "class_code" | "status" | "submitted_by">): Promise<Class> {
     return apiFetch<Class>("/api/classes", {
       method: "POST",
       body: JSON.stringify(body),
     });
   },
 
-  update(id: string, body: Partial<Omit<Class, "id" | "student_count">>): Promise<Class> {
+  update(id: string, body: Partial<Omit<Class, "id" | "student_count" | "class_code" | "status" | "submitted_by">>): Promise<Class> {
     return apiFetch<Class>(`/api/classes/${id}`, {
       method: "PUT",
       body: JSON.stringify(body),
@@ -305,6 +308,47 @@ export const classesApi = {
 
   delete(id: string): Promise<void> {
     return apiFetch<void>(`/api/classes/${id}`, { method: "DELETE" });
+  },
+
+  approve(id: string): Promise<Class> {
+    return apiFetch<Class>(`/api/classes/${id}/approve`, { method: "PATCH" });
+  },
+
+  reject(id: string): Promise<Class> {
+    return apiFetch<Class>(`/api/classes/${id}/reject`, { method: "PATCH" });
+  },
+};
+
+// ── Subjects ──────────────────────────────────────────────────────────────────
+
+export interface Subject {
+  id: string;
+  subject_uid: string;   // e.g. SUB001
+  name: string;
+  code: string;
+  description: string;
+  status: string;        // active | pending | rejected
+  submitted_by: string;
+}
+
+export const subjectsApi = {
+  list(signal?: AbortSignal): Promise<Subject[]> {
+    return apiFetch<Subject[]>("/api/subjects", { signal });
+  },
+  create(body: Omit<Subject, "id" | "subject_uid" | "status" | "submitted_by">): Promise<Subject> {
+    return apiFetch<Subject>("/api/subjects", { method: "POST", body: JSON.stringify(body) });
+  },
+  update(id: string, body: Partial<Omit<Subject, "id" | "subject_uid" | "status" | "submitted_by">>): Promise<Subject> {
+    return apiFetch<Subject>(`/api/subjects/${id}`, { method: "PUT", body: JSON.stringify(body) });
+  },
+  delete(id: string): Promise<void> {
+    return apiFetch<void>(`/api/subjects/${id}`, { method: "DELETE" });
+  },
+  approve(id: string): Promise<Subject> {
+    return apiFetch<Subject>(`/api/subjects/${id}/approve`, { method: "PATCH" });
+  },
+  reject(id: string): Promise<Subject> {
+    return apiFetch<Subject>(`/api/subjects/${id}/reject`, { method: "PATCH" });
   },
 };
 
@@ -673,5 +717,30 @@ export const galleryApi = {
     return apiFetch<{ deleted: boolean; key: string }>(`/api/gallery/files?key=${encodeURIComponent(key)}`, {
       method: "DELETE",
     });
+  },
+};
+
+// ── Users (admin-only) ──────────────────────────────────────────────────────────
+
+export interface AppUser {
+  id: string;
+  email: string;
+  name: string;
+  role: string; // admin | teacher | finance
+  is_active: boolean;
+}
+
+export const usersApi = {
+  list(): Promise<AppUser[]> {
+    return apiFetch<AppUser[]>("/api/auth/users");
+  },
+  create(body: { email: string; name: string; role: string; password: string }): Promise<AppUser> {
+    return apiFetch<AppUser>("/api/auth/users", { method: "POST", body: JSON.stringify(body) });
+  },
+  update(id: string, body: Partial<{ name: string; role: string; password: string; is_active: boolean }>): Promise<AppUser> {
+    return apiFetch<AppUser>(`/api/auth/users/${id}`, { method: "PUT", body: JSON.stringify(body) });
+  },
+  delete(id: string): Promise<void> {
+    return apiFetch<void>(`/api/auth/users/${id}`, { method: "DELETE" });
   },
 };

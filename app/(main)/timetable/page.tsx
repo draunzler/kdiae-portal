@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { timetableApi, scheduleApi, type PeriodDef } from "@/lib/api";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { timetableApi, scheduleApi, classesApi, type PeriodDef, type Class } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -243,9 +243,12 @@ function entryKey(day: string, periodId: string) { return `${day}::${periodId}`;
 
 export default function TimetablePage() {
   const [selectedClass, setSelectedClass] = useState("Class 6");
+  const [classesList, setClassesList]     = useState<Class[]>([]);
+  const [classSubjects, setClassSubjects] = useState<string[]>(Object.keys(SUBJECT_STYLES));
+  const subjectsAbortRef                  = useRef<AbortController | null>(null);
   const [periodDefs, setPeriodDefs] = useState<PeriodDef[]>(defaultDefsForClass("Class 6"));
   const [timetables, setTimetables] = useState<Record<string, Timetable>>(
-    Object.fromEntries(CLASSES.map(c => [c, emptyTimetableFromDefs(defaultDefsForClass(c))]))
+    { "Class 6": emptyTimetableFromDefs(defaultDefsForClass("Class 6")) }
   );
   // "day::periodId" → backend entry id
   const [entryMap, setEntryMap] = useState<Record<string, string>>({});
@@ -272,11 +275,35 @@ export default function TimetablePage() {
   const todayName = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][new Date().getDay()];
   const data = timetables[selectedClass] ?? emptyTimetableFromDefs(periodDefs);
 
-  // Default activeDay to today if it's a weekday
+  // Load classes list on mount (for dropdown)
   useEffect(() => {
-    if (DAYS.includes(todayName)) setActiveDay(todayName);
+    classesApi.list().then(list => {
+      setClassesList(list.filter(c => c.status === "active"));
+      // Seed subjects for the initial selectedClass
+      const match = list.find(c => c.name === "Class 6");
+      if (match && match.subjects.length) setClassSubjects(match.subjects);
+    }).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Fetch subjects for the selected class via API; cancel previous in-flight request
+  useEffect(() => {
+    // Abort any previous fetch
+    subjectsAbortRef.current?.abort();
+    const controller = new AbortController();
+    subjectsAbortRef.current = controller;
+
+    classesApi.list(controller.signal)
+      .then(list => {
+        const match = list.find(c => c.name === selectedClass);
+        setClassSubjects(match && match.subjects.length ? match.subjects : Object.keys(SUBJECT_STYLES));
+      })
+      .catch(err => {
+        if (err.name !== "AbortError") setClassSubjects(Object.keys(SUBJECT_STYLES));
+      });
+
+    return () => controller.abort();
+  }, [selectedClass]);
 
   useEffect(() => {
     const id = setInterval(() => setSimMins(nowToMinutes()), 30_000);
@@ -471,6 +498,7 @@ export default function TimetablePage() {
 
   const sharedProps = {
     data, periods, periodDefs, simMins, schoolStart, totalMins, dragState, dropTarget,
+    subjectList: classSubjects,
     onDragStart: handleDragStart, onDrop: handleDrop,
     onDragOver: setDropTarget,
     onDragEnd: () => { setDragState(null); setDropTarget(null); },
@@ -531,7 +559,7 @@ export default function TimetablePage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {CLASSES.map(c => (
+                  {(classesList.length ? classesList.map(c => c.name) : CLASSES).map(c => (
                     <SelectItem key={c} value={c} className="text-[13px]">{c}</SelectItem>
                   ))}
                 </SelectContent>
@@ -570,11 +598,12 @@ export default function TimetablePage() {
 function WeekView({
   data, periods, periodDefs, days, simMins, schoolStart, totalMins, todayName,
   dragState, dropTarget, onDragStart, onDrop, onDragOver, onDragEnd, onDelete, onAdd,
-  onUpdatePeriodDef, onDeletePeriodRow, onAddPeriodRow, onReorderPeriod,
+  onUpdatePeriodDef, onDeletePeriodRow, onAddPeriodRow, onReorderPeriod, subjectList,
 }: {
   data: Timetable; periods: Period[]; periodDefs: PeriodDef[]; days: string[];
   simMins: number; schoolStart: number; totalMins: number; todayName: string;
   dragState: DragState | null; dropTarget: { periodId: string; day: string } | null;
+  subjectList: string[];
   onDragStart: (p: string, d: string, s: NonNullable<Slot>) => void;
   onDrop: (p: string, d: string) => void;
   onDragOver: (t: { periodId: string; day: string } | null) => void;
@@ -757,6 +786,7 @@ function WeekView({
                             isDropTarget={isDropTarget}
                             onDragStart={() => slot && onDragStart(p.id, d, slot)}
                             onDragEnd={onDragEnd}
+                            subjectList={subjectList}
                             onDelete={() => onDelete(p.id, d)}
                             onAdd={(subject, teacher) => onAdd(p.id, d, subject, teacher)}
                           />
@@ -800,10 +830,11 @@ function WeekView({
 
 function DayView({
   data, periods, day, simMins, schoolStart, totalMins, schoolEnd, isToday,
-  dragState, dropTarget, onDragStart, onDrop, onDragOver, onDragEnd, onDelete, onAdd,
+  dragState, dropTarget, onDragStart, onDrop, onDragOver, onDragEnd, onDelete, onAdd, subjectList,
 }: {
   data: Timetable; periods: Period[]; day: string; simMins: number; schoolStart: number; totalMins: number; schoolEnd: number; isToday: boolean;
   dragState: DragState | null; dropTarget: { periodId: string; day: string } | null;
+  subjectList: string[];
   onDragStart: (p: string, d: string, s: NonNullable<Slot>) => void;
   onDrop: (p: string, d: string) => void;
   onDragOver: (t: { periodId: string; day: string } | null) => void;
@@ -919,6 +950,7 @@ function DayView({
                     periodLabel={p.label}
                     periodTime={p.time}
                     fillHeight
+                    subjectList={subjectList}
                     onDelete={() => onDelete(p.id, day)}
                     onAdd={(subject, teacher) => onAdd(p.id, day, subject, teacher)}
                   />
@@ -946,17 +978,23 @@ const SUBJECT_LIST = Object.keys(SUBJECT_STYLES);
 
 function SlotCard({
   slot, isDragSource, isDropTarget, onDragStart, onDragEnd, large, periodLabel, periodTime, fillHeight,
-  onDelete, onAdd,
+  onDelete, onAdd, subjectList,
 }: {
   slot: Slot; isDragSource: boolean; isDropTarget: boolean;
   onDragStart: () => void; onDragEnd: () => void;
   large?: boolean; periodLabel?: string; periodTime?: string; fillHeight?: boolean;
+  subjectList: string[];
   onDelete?: () => void;
   onAdd?: (subject: string, teacher: string) => void;
 }) {
-  const [addSubject, setAddSubject] = useState(SUBJECT_LIST[0]);
+  const [addSubject, setAddSubject] = useState("");
   const [addTeacher, setAddTeacher] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+
+  // Reset subject selection when subjectList changes (class changed)
+  useEffect(() => {
+    setAddSubject(subjectList[0] ?? "");
+  }, [subjectList]);
 
   if (!slot) {
     return (
@@ -991,7 +1029,7 @@ function SlotCard({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {SUBJECT_LIST.map(s => (
+                  {subjectList.map(s => (
                     <SelectItem key={s} value={s} className="text-[12px]">{s}</SelectItem>
                   ))}
                 </SelectContent>

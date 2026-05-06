@@ -14,21 +14,21 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { useAuth } from "@/lib/auth-context";
 
+// roles: which roles can access this item. undefined = all roles.
 const navItems = [
-  { label: "Dashboard",          icon: faTableColumns,  href: "/"             },
-  { label: "Students",           icon: faUsers,         href: "/students"     },
-  { label: "Admissions",         icon: faUserPlus,      href: "/admissions"   },
-  // { label: "Teachers",        icon: faGraduationCap, href: "/teachers"     },
-  { label: "Classes & Subjects", icon: faChalkboard,    href: "/classes"      },
-  { label: "Timetable",          icon: faCalendarDays,  href: "/timetable"    },
-  { label: "Fees & Finance",     icon: faCreditCard,    href: "/fees"         },
-  { label: "Exams & Results",    icon: faClipboardList, href: "/exams"        },
-  { label: "Attendance",         icon: faChartColumn,   href: "/attendance"   },
-  { label: "Transport",          icon: faBus,           href: "/transport"    },
-  { label: "Announcements",      icon: faBullhorn,      href: "/announcements"},
-  { label: "Gallery",            icon: faImages,        href: "/gallery"      },
-  { label: "Reports",            icon: faChartPie,      href: "/reports"      },
-  { label: "Settings",           icon: faGear,          href: "/settings"     },
+  { label: "Dashboard",          icon: faTableColumns,  href: "/"              },
+  { label: "Students",           icon: faUsers,         href: "/students"      },
+  { label: "Admissions",         icon: faUserPlus,      href: "/admissions",   roles: ["admin", "teacher"] },
+  { label: "Classes & Subjects", icon: faChalkboard,    href: "/classes",      roles: ["admin", "teacher"] },
+  { label: "Timetable",          icon: faCalendarDays,  href: "/timetable",    roles: ["admin", "teacher"] },
+  { label: "Fees & Finance",     icon: faCreditCard,    href: "/fees",         roles: ["admin", "finance"] },
+  { label: "Exams & Results",    icon: faClipboardList, href: "/exams",        roles: ["admin", "teacher"] },
+  { label: "Attendance",         icon: faChartColumn,   href: "/attendance",   roles: ["admin", "teacher"] },
+  { label: "Transport",          icon: faBus,           href: "/transport",    roles: ["admin", "finance"] },
+  { label: "Announcements",      icon: faBullhorn,      href: "/announcements", roles: ["admin", "teacher"] },
+  { label: "Gallery",            icon: faImages,        href: "/gallery",      roles: ["admin", "teacher"] },
+  { label: "Reports",            icon: faChartPie,      href: "/reports",      roles: ["admin", "finance"] },
+  { label: "Settings",           icon: faGear,          href: "/settings",     roles: ["admin"] },
 ];
 
 function CollapseIcon({ collapsed }: { collapsed: boolean }) {
@@ -131,7 +131,9 @@ export default function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-2 flex flex-col gap-0.5">
-        {navItems.map(({ label, icon, href }) => {
+        {navItems
+          .filter(({ roles }) => !roles || !user?.role || roles.includes(user.role))
+          .map(({ label, icon, href }) => {
           const active = pathname === href;
           return (
             <Link
