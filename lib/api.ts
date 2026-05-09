@@ -718,6 +718,14 @@ export const galleryApi = {
       method: "DELETE",
     });
   },
+
+  /** Called after a successful PUT upload to persist the item in MongoDB. */
+  registerItem(key: string, title = "", subtitle = ""): Promise<{ id: string; key: string; url: string; category: string; title: string; subtitle: string; uploaded_at: string }> {
+    return apiFetch("/api/gallery/items/register", {
+      method: "POST",
+      body: JSON.stringify({ key, title, subtitle }),
+    });
+  },
 };
 
 // ── Users (admin-only) ──────────────────────────────────────────────────────────

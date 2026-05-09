@@ -110,7 +110,7 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="flex items-center border-b border-slate-200 px-3 py-[11px] shrink-0 gap-2 overflow-hidden h-14">
         <Image
-          src="/logo.png"
+          src="https://cdn.kdiae.in/logo.png"
           alt="KD Institute"
           width={32}
           height={32}

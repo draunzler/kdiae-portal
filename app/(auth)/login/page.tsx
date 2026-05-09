@@ -113,7 +113,7 @@ export default function LoginPage() {
           />
           <div className="relative w-18 h-18 rounded-full flex items-center justify-center">
             <Image
-              src="/logo.png"
+              src="https://cdn.kdiae.in/logo.png"
               alt="KDIAE"
               width={90}
               height={90}

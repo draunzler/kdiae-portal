@@ -531,6 +531,12 @@ export default function GalleryPage() {
           headers: { "Content-Type": file.type || "application/octet-stream" },
           body: file,
         });
+        // Register in MongoDB so the public website can display it
+        try {
+          await galleryApi.registerItem(key);
+        } catch {
+          // Non-fatal: item will still be in R2; can be resynced later
+        }
         setUploadProgress(prev => prev.map(it => it.name === file.name ? { ...it, progress: 100 } : it));
       } catch {
         setUploadProgress(prev => prev.map(it => it.name === file.name ? { ...it, progress: 100 } : it));
