@@ -17,6 +17,35 @@ export function getAccessToken(): string | null {
 /** Clears the in-memory access token. Call this on logout. */
 export function clearSession(): void {
   _accessToken = null;
+  if (typeof window !== "undefined") {
+    sessionStorage.removeItem("sms_last_activity");
+  }
+}
+
+// ── Activity tracking ────────────────────────────────────────────────────────
+// Uses sessionStorage so the timestamp is wiped automatically when the tab
+// is closed. A fresh tab open therefore has no recorded activity.
+
+const ACTIVITY_KEY = "sms_last_activity";
+/** Session timeout in milliseconds — must match JWT_EXPIRE_MINUTES on the backend. */
+export const SESSION_TIMEOUT_MS = 60 * 60 * 1000; // 1 hour
+
+/** Record the current time as the latest user activity. */
+export function touchActivity(): void {
+  if (typeof window !== "undefined") {
+    sessionStorage.setItem(ACTIVITY_KEY, String(Date.now()));
+  }
+}
+
+/**
+ * Returns true if the user has been active within SESSION_TIMEOUT_MS.
+ * Returns false when there is no recorded activity (fresh tab open after close).
+ */
+export function isRecentlyActive(): boolean {
+  if (typeof window === "undefined") return false;
+  const raw = sessionStorage.getItem(ACTIVITY_KEY);
+  if (!raw) return false;
+  return Date.now() - Number(raw) < SESSION_TIMEOUT_MS;
 }
 
 // ── JWT helpers ─────────────────────────────────────────────────────────────
