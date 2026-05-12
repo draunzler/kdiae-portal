@@ -13,22 +13,24 @@ import {
   faUserPlus,
 } from "@fortawesome/free-solid-svg-icons";
 import { useAuth } from "@/lib/auth-context";
+import { settingsApi, type RoleEntry } from "@/lib/api";
 
-// roles: which roles can access this item. undefined = all roles.
+// permKey maps to the PERM_KEYS stored in the roles matrix.
+// Items without a permKey always show (Dashboard) or use the static roles fallback.
 const navItems = [
-  { label: "Dashboard",          icon: faTableColumns,  href: "/"              },
-  { label: "Students",           icon: faUsers,         href: "/students"      },
-  { label: "Admissions",         icon: faUserPlus,      href: "/admissions",   roles: ["admin", "teacher"] },
-  { label: "Classes & Subjects", icon: faChalkboard,    href: "/classes",      roles: ["admin", "teacher"] },
-  { label: "Timetable",          icon: faCalendarDays,  href: "/timetable",    roles: ["admin", "teacher"] },
-  { label: "Fees & Finance",     icon: faCreditCard,    href: "/fees",         roles: ["admin", "finance"] },
-  { label: "Exams & Results",    icon: faClipboardList, href: "/exams",        roles: ["admin", "teacher"] },
-  { label: "Attendance",         icon: faChartColumn,   href: "/attendance",   roles: ["admin", "teacher"] },
-  { label: "Transport",          icon: faBus,           href: "/transport",    roles: ["admin", "finance"] },
-  { label: "Announcements",      icon: faBullhorn,      href: "/announcements", roles: ["admin", "teacher"] },
-  { label: "Gallery",            icon: faImages,        href: "/gallery",      roles: ["admin", "teacher"] },
-  { label: "Reports",            icon: faChartPie,      href: "/reports",      roles: ["admin", "finance"] },
-  { label: "Settings",           icon: faGear,          href: "/settings",     roles: ["admin"] },
+  { label: "Dashboard",          icon: faTableColumns,  href: "/"               },
+  { label: "Students",           icon: faUsers,         href: "/students",       permKey: "students"      },
+  { label: "Admissions",         icon: faUserPlus,      href: "/admissions",     permKey: "admissions"    },
+  { label: "Classes & Subjects", icon: faChalkboard,    href: "/classes",        permKey: "classes"       },
+  { label: "Timetable",          icon: faCalendarDays,  href: "/timetable",      permKey: "classes"       },
+  { label: "Fees & Finance",     icon: faCreditCard,    href: "/fees",           permKey: "fees"          },
+  { label: "Exams & Results",    icon: faClipboardList, href: "/exams",          permKey: "exams"         },
+  { label: "Attendance",         icon: faChartColumn,   href: "/attendance",     permKey: "attendance"    },
+  { label: "Transport",          icon: faBus,           href: "/transport",      permKey: "transport"     },
+  { label: "Announcements",      icon: faBullhorn,      href: "/announcements",  permKey: "announcements" },
+  { label: "Gallery",            icon: faImages,        href: "/gallery",        roles: ["admin"]         },
+  { label: "Reports",            icon: faChartPie,      href: "/reports",        permKey: "reports"       },
+  { label: "Settings",           icon: faGear,          href: "/settings",       permKey: "settings"      },
 ];
 
 function CollapseIcon({ collapsed }: { collapsed: boolean }) {
@@ -81,6 +83,28 @@ export default function Sidebar() {
   const router = useRouter();
   const { user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [rolesMatrix, setRolesMatrix] = useState<RoleEntry[]>([]);
+
+  // Fetch roles matrix once on mount so nav reflects admin-configured permissions
+  useEffect(() => {
+    settingsApi.getRoles()
+      .then((d) => { if (d.roles?.length) setRolesMatrix(d.roles); })
+      .catch(() => { /* fall back to no matrix — items with static roles still work */ });
+  }, []);
+
+  // Returns true if the current user's role is allowed based on the live matrix.
+  // Falls back to the static `roles` array when no permKey is set.
+  const canSee = (item: { permKey?: string; roles?: string[] }): boolean => {
+    if (!user?.role) return true;
+    if (user.role === "admin") return true; // admins always see everything
+    if (item.permKey && rolesMatrix.length > 0) {
+      const row = rolesMatrix.find((r) => r.role.toLowerCase() === user.role.toLowerCase());
+      return row ? !!row.perms[item.permKey] : false;
+    }
+    if (item.roles) return item.roles.includes(user.role);
+    return true; // no restriction (Dashboard)
+  };
+
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("sms-sidebar-collapsed") === "true";
@@ -132,7 +156,7 @@ export default function Sidebar() {
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-2 flex flex-col gap-0.5">
         {navItems
-          .filter(({ roles }) => !roles || !user?.role || roles.includes(user.role))
+          .filter(canSee)
           .map(({ label, icon, href }) => {
           const active = pathname === href;
           return (

@@ -624,6 +624,28 @@ export interface TransportDashboard {
   students: TransportStudent[];
 }
 
+export interface TransportDriver {
+  id: string;
+  name: string;
+  phone: string;
+  license: string;
+  assigned_bus: string;
+  assigned_route: string;
+  status: string;
+}
+
+export interface TransportVehicle {
+  id: string;
+  bus_number: string;
+  model: string;
+  type: string;
+  capacity: number;
+  driver: string;
+  assigned_route: string;
+  status: string;
+  last_service: string;
+}
+
 export const transportApi = {
   dashboard(): Promise<TransportDashboard> {
     return apiFetch<TransportDashboard>("/api/transport/dashboard");
@@ -633,8 +655,70 @@ export const transportApi = {
     return apiFetch<TransportRoute[]>("/api/transport/routes");
   },
 
+  createRoute(body: Omit<TransportRoute, "id">): Promise<TransportRoute> {
+    return apiFetch<TransportRoute>("/api/transport/routes", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateRoute(id: string, body: Partial<Omit<TransportRoute, "id">>): Promise<TransportRoute> {
+    return apiFetch<TransportRoute>(`/api/transport/routes/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteRoute(id: string): Promise<void> {
+    return apiFetch<void>(`/api/transport/routes/${id}`, { method: "DELETE" });
+  },
+
   listStudents(): Promise<TransportStudent[]> {
     return apiFetch<TransportStudent[]>("/api/transport/students");
+  },
+
+  listDrivers(): Promise<TransportDriver[]> {
+    return apiFetch<TransportDriver[]>("/api/transport/drivers");
+  },
+
+  createDriver(body: Omit<TransportDriver, "id">): Promise<TransportDriver> {
+    return apiFetch<TransportDriver>("/api/transport/drivers", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateDriver(id: string, body: Partial<Omit<TransportDriver, "id">>): Promise<TransportDriver> {
+    return apiFetch<TransportDriver>(`/api/transport/drivers/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteDriver(id: string): Promise<void> {
+    return apiFetch<void>(`/api/transport/drivers/${id}`, { method: "DELETE" });
+  },
+
+  listVehicles(): Promise<TransportVehicle[]> {
+    return apiFetch<TransportVehicle[]>("/api/transport/vehicles");
+  },
+
+  createVehicle(body: Omit<TransportVehicle, "id">): Promise<TransportVehicle> {
+    return apiFetch<TransportVehicle>("/api/transport/vehicles", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateVehicle(id: string, body: Partial<Omit<TransportVehicle, "id">>): Promise<TransportVehicle> {
+    return apiFetch<TransportVehicle>(`/api/transport/vehicles/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteVehicle(id: string): Promise<void> {
+    return apiFetch<void>(`/api/transport/vehicles/${id}`, { method: "DELETE" });
   },
 };
 
@@ -750,5 +834,69 @@ export const usersApi = {
   },
   delete(id: string): Promise<void> {
     return apiFetch<void>(`/api/auth/users/${id}`, { method: "DELETE" });
+  },
+};
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+export interface SchoolSettings {
+  school_name: string;
+  address: string;
+  phone: string;
+  email: string;
+  website: string;
+  school_type: string;
+  motto: string;
+}
+
+export interface AcademicSettings {
+  academic_year: string;
+  current_term: string;
+  term_start_date: string;
+  term_end_date: string;
+  next_session_start: string;
+}
+
+export interface RolePerms {
+  [key: string]: boolean;
+}
+
+export interface RoleEntry {
+  role: string;
+  color: string;
+  perms: RolePerms;
+}
+
+export interface RolesPayload {
+  roles: RoleEntry[];
+}
+
+export const settingsApi = {
+  getSchool(): Promise<SchoolSettings> {
+    return apiFetch<SchoolSettings>("/api/settings/school");
+  },
+  updateSchool(body: SchoolSettings): Promise<SchoolSettings> {
+    return apiFetch<SchoolSettings>("/api/settings/school", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  },
+  getAcademic(): Promise<AcademicSettings> {
+    return apiFetch<AcademicSettings>("/api/settings/academic");
+  },
+  updateAcademic(body: AcademicSettings): Promise<AcademicSettings> {
+    return apiFetch<AcademicSettings>("/api/settings/academic", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  },
+  getRoles(): Promise<RolesPayload> {
+    return apiFetch<RolesPayload>("/api/settings/roles");
+  },
+  updateRoles(body: RolesPayload): Promise<RolesPayload> {
+    return apiFetch<RolesPayload>("/api/settings/roles", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
   },
 };

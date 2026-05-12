@@ -6,6 +6,7 @@ import {
   faFloppyDisk, faShield, faBell, faGlobe, faLock,
   faUsers, faGraduationCap, faBuilding, faPlus, faPencil,
   faTrash, faSpinner, faCheck, faKey, faEye, faEyeSlash,
+  faCheckCircle, faExclamationTriangle,
 } from "@fortawesome/free-solid-svg-icons";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -13,17 +14,28 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { usersApi, type AppUser } from "@/lib/api";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import {
+  usersApi, settingsApi,
+  type AppUser, type SchoolSettings, type AcademicSettings, type RoleEntry,
+} from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
 // ── RBAC permission matrix ────────────────────────────────────────────────────
 
 const PERM_KEYS = ["students", "admissions", "classes", "fees", "exams", "attendance", "transport", "reports", "announcements", "settings"];
 
-const ROLES_MATRIX = [
+const ROLES_DEFAULTS: RoleEntry[] = [
   {
     role: "Admin",
     color: "bg-blue-50 text-blue-700 border-blue-200",
@@ -62,10 +74,40 @@ const ROLE_COLORS: Record<string, string> = {
 
 function RoleBadge({ role }: { role: string }) {
   return (
-    <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold border capitalize ${ROLE_COLORS[role] ?? "bg-slate-50 text-slate-600 border-slate-200"}`}>
+    <Badge
+      variant="outline"
+      className={`capitalize text-[11px] font-semibold ${ROLE_COLORS[role] ?? "bg-slate-50 text-slate-600 border-slate-200"}`}
+    >
       {role}
-    </span>
+    </Badge>
   );
+}
+
+// ── SaveStatus ────────────────────────────────────────────────────────────────
+
+function SaveStatus({ status }: { status: "idle" | "saving" | "saved" | "error"; error?: string }) {
+  if (status === "saving") {
+    return (
+      <span className="flex items-center gap-1.5 text-[12px] text-slate-500">
+        <FontAwesomeIcon icon={faSpinner} className="animate-spin text-[11px]" /> Saving…
+      </span>
+    );
+  }
+  if (status === "saved") {
+    return (
+      <span className="flex items-center gap-1.5 text-[12px] text-emerald-600">
+        <FontAwesomeIcon icon={faCheckCircle} className="text-[11px]" /> Saved
+      </span>
+    );
+  }
+  if (status === "error") {
+    return (
+      <span className="flex items-center gap-1.5 text-[12px] text-red-600">
+        <FontAwesomeIcon icon={faExclamationTriangle} className="text-[11px]" /> Failed to save
+      </span>
+    );
+  }
+  return null;
 }
 
 // ── User Dialog ───────────────────────────────────────────────────────────────
@@ -152,16 +194,17 @@ function UserDialog({
             </div>
           )}
           <div>
-            <label className="text-[11px] font-semibold text-slate-400 uppercase block mb-1">Role</label>
-            <div className="flex gap-2">
-              {ROLE_OPTIONS.map((r) => (
-                <button key={r} onClick={() => setForm((p) => ({ ...p, role: r }))}
-                  className={`flex-1 py-1.5 rounded-md text-[12px] font-semibold border-2 capitalize transition-all
-                    ${form.role === r ? "border-[#007BFF] bg-[#007BFF]/10 text-[#007BFF]" : "border-slate-200 text-slate-500 hover:border-slate-300"}`}>
-                  {r}
-                </button>
-              ))}
-            </div>
+            <label className="text-[11px] font-semibold text-slate-400 uppercase block mb-1.5">Role</label>
+            <Select value={form.role} onValueChange={(v) => setForm((p) => ({ ...p, role: v }))}>
+              <SelectTrigger className="h-9 text-[13px] bg-white border-slate-200 capitalize">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ROLE_OPTIONS.map((r) => (
+                  <SelectItem key={r} value={r} className="capitalize text-[13px]">{r}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <label className="text-[11px] font-semibold text-slate-400 uppercase block mb-1">
@@ -179,11 +222,15 @@ function UserDialog({
           </div>
           {isEdit && (
             <div className="flex items-center gap-3">
-              <button onClick={() => setForm((p) => ({ ...p, is_active: !p.is_active }))}
-                className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${form.is_active ? "bg-[#007BFF]" : "bg-slate-200"}`}>
-                <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${form.is_active ? "translate-x-4" : "translate-x-0"}`} />
-              </button>
-              <span className="text-[12px] text-slate-700">Account Active</span>
+              <Checkbox
+                id="is_active"
+                checked={form.is_active}
+                onCheckedChange={(v) => setForm((p) => ({ ...p, is_active: !!v }))}
+                className="data-[state=checked]:bg-[#007BFF] data-[state=checked]:border-[#007BFF]"
+              />
+              <label htmlFor="is_active" className="text-[13px] text-slate-700 cursor-pointer select-none">
+                Account Active
+              </label>
             </div>
           )}
         </div>
@@ -213,6 +260,106 @@ export default function SettingsPage() {
     fee_due: true, attendance: true, exam_schedule: true, announcements: false, results: true, transport: false,
   });
 
+  // ── School tab state ──
+  const SCHOOL_BLANK: SchoolSettings = {
+    school_name: "", address: "", phone: "", email: "", website: "", school_type: "", motto: "",
+  };
+  const [school, setSchool]               = useState<SchoolSettings>(SCHOOL_BLANK);
+  const [schoolLoaded, setSchoolLoaded]   = useState(false);
+  const [schoolStatus, setSchoolStatus]   = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  const loadSchool = async () => {
+    if (schoolLoaded) return;
+    try {
+      const data = await settingsApi.getSchool();
+      setSchool(data);
+      setSchoolLoaded(true);
+    } catch { /* silently fall back to defaults */ }
+  };
+
+  const saveSchool = async () => {
+    setSchoolStatus("saving");
+    try {
+      const updated = await settingsApi.updateSchool(school);
+      setSchool(updated);
+      setSchoolStatus("saved");
+      setTimeout(() => setSchoolStatus("idle"), 3000);
+    } catch {
+      setSchoolStatus("error");
+      setTimeout(() => setSchoolStatus("idle"), 4000);
+    }
+  };
+
+  // ── Academic tab state ──
+  const ACADEMIC_BLANK: AcademicSettings = {
+    academic_year: "", current_term: "", term_start_date: "", term_end_date: "", next_session_start: "",
+  };
+  const [academic, setAcademic]               = useState<AcademicSettings>(ACADEMIC_BLANK);
+  const [academicLoaded, setAcademicLoaded]   = useState(false);
+  const [academicStatus, setAcademicStatus]   = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  const loadAcademic = async () => {
+    if (academicLoaded) return;
+    try {
+      const data = await settingsApi.getAcademic();
+      setAcademic(data);
+      setAcademicLoaded(true);
+    } catch { /* silently fall back to defaults */ }
+  };
+
+  const saveAcademic = async () => {
+    setAcademicStatus("saving");
+    try {
+      const updated = await settingsApi.updateAcademic(academic);
+      setAcademic(updated);
+      setAcademicStatus("saved");
+      setTimeout(() => setAcademicStatus("idle"), 3000);
+    } catch {
+      setAcademicStatus("error");
+      setTimeout(() => setAcademicStatus("idle"), 4000);
+    }
+  };
+
+  // Load school settings eagerly on mount
+  useEffect(() => { loadSchool(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Roles tab state ──
+  const [rolesMatrix, setRolesMatrix]         = useState<RoleEntry[]>(ROLES_DEFAULTS);
+  const [rolesLoaded, setRolesLoaded]         = useState(false);
+  const [rolesStatus, setRolesStatus]         = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  const loadRoles = async () => {
+    if (rolesLoaded) return;
+    try {
+      const data = await settingsApi.getRoles();
+      if (data.roles?.length) setRolesMatrix(data.roles);
+      setRolesLoaded(true);
+    } catch { /* fall back to defaults */ }
+  };
+
+  const saveRoles = async () => {
+    setRolesStatus("saving");
+    try {
+      const data = await settingsApi.updateRoles({ roles: rolesMatrix });
+      if (data.roles?.length) setRolesMatrix(data.roles);
+      setRolesStatus("saved");
+      setTimeout(() => setRolesStatus("idle"), 3000);
+    } catch {
+      setRolesStatus("error");
+      setTimeout(() => setRolesStatus("idle"), 4000);
+    }
+  };
+
+  const togglePerm = (roleIdx: number, perm: string) => {
+    setRolesMatrix((prev) =>
+      prev.map((r, i) =>
+        i === roleIdx
+          ? { ...r, perms: { ...r.perms, [perm]: !r.perms[perm] } }
+          : r
+      )
+    );
+  };
+
   // ── Users tab state ──
   const [users, setUsers]               = useState<AppUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -239,7 +386,14 @@ export default function SettingsPage() {
 
   return (
     <>
-      <Tabs defaultValue="school">
+      <Tabs
+        defaultValue="school"
+        onValueChange={(v) => {
+          if (v === "academic") loadAcademic();
+          if (v === "roles") loadRoles();
+          if (v === "users" && users.length === 0) loadUsers();
+        }}
+      >
         <TabsList className="bg-slate-100 h-8 p-0.5 flex-wrap gap-y-1">
           {[
             { v: "school",        label: "School"        },
@@ -269,22 +423,38 @@ export default function SettingsPage() {
             <Separator />
             <CardContent className="pt-4 grid grid-cols-2 gap-4">
               {[
-                { label: "School Name",  val: "KD Institute of Advance Education",                 full: true },
-                { label: "Address",      val: "Ilsoba, Depara, 13 Pandua-Kalna Road, Hooghly-712146", full: true },
-                { label: "Phone",        val: "+91 74328 00090" },
-                { label: "Email",        val: "info@kdiae.in"   },
-                { label: "Website",      val: "www.kdiae.in"    },
-                { label: "School Type",  val: "CBSE Co-Education" },
-                { label: "Motto",        val: "Knowledge, Integrity, Excellence", full: true },
+                { label: "School Name",  key: "school_name" as const,  full: true },
+                { label: "Address",      key: "address" as const,      full: true },
+                { label: "Phone",        key: "phone" as const },
+                { label: "Email",        key: "email" as const },
+                { label: "Website",      key: "website" as const },
+                { label: "School Type",  key: "school_type" as const },
+                { label: "Motto",        key: "motto" as const,        full: true },
               ].map((f) => (
-                <div key={f.label} className={f.full ? "col-span-2" : ""}>
+                <div key={f.key} className={f.full ? "col-span-2" : ""}>
                   <label className="text-[12px] font-medium text-slate-600 mb-1 block">{f.label}</label>
-                  <Input defaultValue={f.val} className="bg-slate-50 border-slate-200 text-[13px] h-8" />
+                  {!schoolLoaded ? (
+                    <Skeleton className="h-8 w-full rounded" />
+                  ) : (
+                    <Input
+                      value={school[f.key]}
+                      onChange={(e) => setSchool((p) => ({ ...p, [f.key]: e.target.value }))}
+                      className="bg-slate-50 border-slate-200 text-[13px] h-8"
+                    />
+                  )}
                 </div>
               ))}
-              <div className="col-span-2 flex justify-end pt-2">
-                <Button size="sm" className="bg-[#007BFF] hover:bg-[#0069d9] text-white h-8 text-[13px] gap-1.5">
-                  <FontAwesomeIcon icon={faFloppyDisk} className="text-[11px]" /> Save Changes
+              <div className="col-span-2 flex items-center justify-end gap-3 pt-2">
+                <SaveStatus status={schoolStatus} />
+                <Button
+                  size="sm"
+                  className="bg-[#007BFF] hover:bg-[#0069d9] text-white h-8 text-[13px] gap-1.5"
+                  onClick={saveSchool}
+                  disabled={schoolStatus === "saving"}
+                >
+                  {schoolStatus === "saving"
+                    ? <><FontAwesomeIcon icon={faSpinner} className="animate-spin text-[11px]" /> Saving…</>
+                    : <><FontAwesomeIcon icon={faFloppyDisk} className="text-[11px]" /> Save Changes</>}
                 </Button>
               </div>
             </CardContent>
@@ -303,20 +473,36 @@ export default function SettingsPage() {
             <Separator />
             <CardContent className="pt-4 grid grid-cols-2 gap-4">
               {[
-                { label: "Academic Year",      val: "2026–2027"    },
-                { label: "Current Term",       val: "Half-yearly"  },
-                { label: "Term Start Date",    val: "Apr 1, 2026"  },
-                { label: "Term End Date",      val: "Aug 31, 2026" },
-                { label: "Next Session Start", val: "Sep 16, 2026", full: true },
+                { label: "Academic Year",      key: "academic_year" as const },
+                { label: "Current Term",       key: "current_term" as const },
+                { label: "Term Start Date",    key: "term_start_date" as const },
+                { label: "Term End Date",      key: "term_end_date" as const },
+                { label: "Next Session Start", key: "next_session_start" as const, full: true },
               ].map((f) => (
-                <div key={f.label} className={(f as { label: string; val: string; full?: boolean }).full ? "col-span-2" : ""}>
+                <div key={f.key} className={(f as { key: string; full?: boolean }).full ? "col-span-2" : ""}>
                   <label className="text-[12px] font-medium text-slate-600 mb-1 block">{f.label}</label>
-                  <Input defaultValue={f.val} className="bg-slate-50 border-slate-200 text-[13px] h-8" />
+                  {!academicLoaded ? (
+                    <Skeleton className="h-8 w-full rounded" />
+                  ) : (
+                    <Input
+                      value={academic[f.key]}
+                      onChange={(e) => setAcademic((p) => ({ ...p, [f.key]: e.target.value }))}
+                      className="bg-slate-50 border-slate-200 text-[13px] h-8"
+                    />
+                  )}
                 </div>
               ))}
-              <div className="col-span-2 flex justify-end pt-2">
-                <Button size="sm" className="bg-[#007BFF] hover:bg-[#0069d9] text-white h-8 text-[13px] gap-1.5">
-                  <FontAwesomeIcon icon={faFloppyDisk} className="text-[11px]" /> Save Changes
+              <div className="col-span-2 flex items-center justify-end gap-3 pt-2">
+                <SaveStatus status={academicStatus} />
+                <Button
+                  size="sm"
+                  className="bg-[#007BFF] hover:bg-[#0069d9] text-white h-8 text-[13px] gap-1.5"
+                  onClick={saveAcademic}
+                  disabled={academicStatus === "saving"}
+                >
+                  {academicStatus === "saving"
+                    ? <><FontAwesomeIcon icon={faSpinner} className="animate-spin text-[11px]" /> Saving…</>
+                    : <><FontAwesomeIcon icon={faFloppyDisk} className="text-[11px]" /> Save Changes</>}
                 </Button>
               </div>
             </CardContent>
@@ -332,44 +518,69 @@ export default function SettingsPage() {
                 <CardTitle className="text-[14px]">Role Permissions</CardTitle>
               </div>
               <p className="text-[12px] text-slate-500 mt-1">
-                The three system roles and the pages each role can access. Only admins can manage users.
+                Click a cell to toggle access for Teacher and Finance roles. Admin permissions are fixed.
               </p>
             </CardHeader>
             <Separator />
             <CardContent className="pt-0 overflow-x-auto">
-              <table className="w-full min-w-[540px]">
-                <thead>
-                  <tr className="border-b border-slate-100">
-                    <th className="py-2.5 px-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 bg-slate-50 w-28">Role</th>
+              <Table className="min-w-[560px]">
+                <TableHeader>
+                  <TableRow className="bg-slate-50 hover:bg-slate-50">
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 w-28">Role</TableHead>
                     {PERM_KEYS.map((k) => (
-                      <th key={k} className="py-2.5 px-1 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-500 bg-slate-50 capitalize">{k}</th>
+                      <TableHead key={k} className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 capitalize px-2">
+                        <div className="flex justify-center">{k}</div>
+                      </TableHead>
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {ROLES_MATRIX.map((r) => (
-                    <tr key={r.role} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="py-2.5 px-3">
-                        <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold border ${r.color}`}>{r.role}</span>
-                      </td>
-                      {PERM_KEYS.map((k) => (
-                        <td key={k} className="py-2.5 px-1 text-center">
-                          {(r.perms as Record<string, boolean>)[k]
-                            ? <span className="inline-block w-4 h-4 bg-[#007BFF] rounded-sm" title="Allowed" />
-                            : <span className="inline-block w-4 h-4 bg-slate-200 rounded-sm" title="Denied" />}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rolesMatrix.map((r, roleIdx) => {
+                    const isLocked = r.role === "Admin";
+                    return (
+                      <TableRow key={r.role}>
+                        <TableCell className="py-3">
+                          <Badge variant="outline" className={`text-[11px] font-semibold ${r.color}`}>
+                            {r.role}
+                          </Badge>
+                        </TableCell>
+                        {PERM_KEYS.map((k) => (
+                          <TableCell key={k} className="px-2 py-3">
+                            <div className="flex justify-center">
+                              <Checkbox
+                                checked={!!r.perms[k]}
+                                onCheckedChange={() => !isLocked && togglePerm(roleIdx, k)}
+                                disabled={isLocked}
+                                className="data-[state=checked]:bg-[#007BFF] data-[state=checked]:border-[#007BFF] cursor-pointer"
+                              />
+                            </div>
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+              <div className="flex items-center justify-end gap-3 pt-4 pb-1">
+                <SaveStatus status={rolesStatus} />
+                <Button
+                  size="sm"
+                  className="bg-[#007BFF] hover:bg-[#0069d9] text-white h-8 text-[13px] gap-1.5"
+                  onClick={saveRoles}
+                  disabled={rolesStatus === "saving"}
+                >
+                  {rolesStatus === "saving"
+                    ? <><FontAwesomeIcon icon={faSpinner} className="animate-spin text-[11px]" /> Saving…</>
+                    : <><FontAwesomeIcon icon={faFloppyDisk} className="text-[11px]" /> Save Changes</>}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
         {/* ── Users (admin only) ── */}
         {isAdmin && (
-          <TabsContent value="users" className="mt-4" onAnimationStart={() => users.length === 0 && loadUsers()}>
+          <TabsContent value="users" className="mt-4">
             <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -382,7 +593,7 @@ export default function SettingsPage() {
                 </Button>
               </div>
 
-              <Card className="shadow-none border-slate-200">
+              <Card className="shadow-none border-slate-200 py-0">
                 <CardContent className="p-0">
                   {usersLoading ? (
                     <div className="flex flex-col divide-y divide-slate-100">
@@ -413,7 +624,9 @@ export default function SettingsPage() {
                             <p className="text-[13px] font-semibold text-slate-800 leading-tight truncate flex items-center gap-2">
                               {u.name}
                               {!u.is_active && (
-                                <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded">Disabled</span>
+                                <Badge variant="outline" className="text-[10px] font-semibold text-slate-400 bg-slate-100 border-slate-200">
+                                  Disabled
+                                </Badge>
                               )}
                             </p>
                             <p className="text-[11px] text-slate-400 truncate mt-0.5">{u.email}</p>
@@ -452,15 +665,17 @@ export default function SettingsPage() {
             <Separator />
             <CardContent className="pt-2 flex flex-col divide-y divide-slate-100">
               {NOTIF_SETTINGS.map((n) => (
-                <div key={n.key} className="flex items-center justify-between py-3">
-                  <div>
+                <div key={n.key} className="flex items-start justify-between gap-4 py-3">
+                  <div className="flex-1">
                     <p className="text-[13px] font-medium text-slate-800">{n.label}</p>
                     <p className="text-[11px] text-slate-400 mt-0.5">{n.desc}</p>
                   </div>
-                  <button onClick={() => setNotifs((prev) => ({ ...prev, [n.key]: !prev[n.key] }))}
-                    className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${notifs[n.key] ? "bg-[#007BFF]" : "bg-slate-200"}`}>
-                    <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow ring-0 transition-transform ${notifs[n.key] ? "translate-x-4" : "translate-x-0"}`} />
-                  </button>
+                  <Checkbox
+                    id={`notif-${n.key}`}
+                    checked={notifs[n.key]}
+                    onCheckedChange={(v) => setNotifs((prev) => ({ ...prev, [n.key]: !!v }))}
+                    className="mt-0.5 data-[state=checked]:bg-[#007BFF] data-[state=checked]:border-[#007BFF]"
+                  />
                 </div>
               ))}
               <div className="pt-3 flex justify-end">

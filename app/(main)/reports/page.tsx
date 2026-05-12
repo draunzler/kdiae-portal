@@ -123,11 +123,11 @@ export default function ReportsPage() {
         {/* Tabs */}
         <Tabs defaultValue="overview">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <TabsList className="bg-slate-100 h-8 p-0.5 w-full sm:w-auto overflow-x-auto justify-start">
+            <TabsList className="bg-slate-100 h-8 p-0.5">
               {["overview", "financial", "academic"].map((t) => (
                 <TabsTrigger
                   key={t} value={t}
-                  className="text-[12px] h-7 capitalize whitespace-nowrap data-[state=active]:bg-white data-[state=active]:text-[#212529] data-[state=active]:shadow-none"
+                  className="text-[12px] capitalize h-7 data-[state=active]:bg-white data-[state=active]:text-[#212529] data-[state=active]:shadow-none"
                 >
                   {t}
                 </TabsTrigger>
@@ -137,7 +137,7 @@ export default function ReportsPage() {
             <Popover>
               <PopoverTrigger asChild>
                 <button className={cn(
-                  "flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-[12px] text-slate-700 hover:bg-slate-50 transition-colors w-full sm:w-auto",
+                  "flex items-center cursor-pointer gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-[12px] text-slate-700 hover:bg-slate-50 transition-colors w-full sm:w-auto",
                   !range?.from && "text-slate-400"
                 )}>
                   <CalendarIcon className="h-3.5 w-3.5 text-slate-400" />

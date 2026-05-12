@@ -2,9 +2,8 @@ import Link from "next/link";
 
 export default function ForbiddenPage() {
   return (
-    <>
+    <div className="flex items-center justify-center min-h-[calc(100vh-8rem)]">
       <div className="flex flex-col items-center text-center max-w-sm w-full">
-        {/* Code */}
         <p className="text-[96px] font-black leading-none text-slate-100 select-none tracking-tight">
           403
         </p>
@@ -19,6 +18,6 @@ export default function ForbiddenPage() {
           ← Back to Dashboard
         </Link>
       </div>
-    </>
+    </div>
   );
 }
