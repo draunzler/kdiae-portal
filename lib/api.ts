@@ -614,8 +614,6 @@ export interface TransportStudent {
   id: string;
   name: string;
   class_name: string;
-  route: string;
-  pickup: string;
   status: string;
 }
 
@@ -630,7 +628,6 @@ export interface TransportDriver {
   phone: string;
   license: string;
   assigned_bus: string;
-  assigned_route: string;
   status: string;
 }
 
@@ -641,7 +638,6 @@ export interface TransportVehicle {
   type: string;
   capacity: number;
   driver: string;
-  assigned_route: string;
   status: string;
   last_service: string;
 }
@@ -675,6 +671,24 @@ export const transportApi = {
 
   listStudents(): Promise<TransportStudent[]> {
     return apiFetch<TransportStudent[]>("/api/transport/students");
+  },
+
+  createStudent(body: Omit<TransportStudent, "id">): Promise<TransportStudent> {
+    return apiFetch<TransportStudent>("/api/transport/students", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateStudent(id: string, body: Partial<Omit<TransportStudent, "id">>): Promise<TransportStudent> {
+    return apiFetch<TransportStudent>(`/api/transport/students/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  },
+
+  deleteStudent(id: string): Promise<void> {
+    return apiFetch<void>(`/api/transport/students/${id}`, { method: "DELETE" });
   },
 
   listDrivers(): Promise<TransportDriver[]> {
